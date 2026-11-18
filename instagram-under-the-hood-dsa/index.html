@@ -1,0 +1,3888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instagram Under the Hood: Interactive Data Structure Visualizer</title>
+  <style>
+    /* ==========================================================================
+       THEME VARIABLES & CSS RESET
+       Instagram-inspired aesthetic (Gradient: Purple -> Pink -> Orange)
+       ========================================================================== */
+    :root {
+      --ig-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      --ig-gradient-subtle: linear-gradient(135deg, rgba(240, 148, 51, 0.12), rgba(220, 39, 67, 0.12), rgba(188, 24, 136, 0.12));
+      --ig-purple: #833ab4;
+      --ig-pink: #e1306c;
+      --ig-orange: #fd1d1d;
+      --ig-amber: #f77737;
+      --ig-yellow: #fcaf45;
+
+      /* Light Theme (Default) */
+      --bg-primary: #fafafa;
+      --bg-surface: #ffffff;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #f3f4f6;
+      --bg-active: #e5e7eb;
+      --border-color: #dbdbdb;
+      --border-subtle: #eaeaea;
+      --text-primary: #262626;
+      --text-secondary: #737373;
+      --text-muted: #8e8e8e;
+      --text-on-accent: #ffffff;
+
+      --code-bg: #1e1e2e;
+      --code-text: #cdd6f4;
+      --log-bg: #0f172a;
+      --log-text: #38bdf8;
+
+      --badge-o1: #10b981;
+      --badge-ologn: #3b82f6;
+      --badge-on: #f59e0b;
+      --badge-onlogn: #8b5cf6;
+      --badge-on2: #ef4444;
+
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.25s ease;
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #0a0a0c;
+      --bg-surface: #121216;
+      --bg-elevated: #1a1a22;
+      --bg-subtle: #22222d;
+      --bg-active: #2e2e3d;
+      --border-color: #2e2e38;
+      --border-subtle: #24242e;
+      --text-primary: #f5f5f7;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --text-on-accent: #ffffff;
+
+      --code-bg: #0b0c10;
+      --code-text: #e2e8f0;
+      --log-bg: #05070d;
+      --log-text: #38bdf8;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
+      --shadow-lg: 0 12px 20px rgba(0,0,0,0.5);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color var(--transition-normal), color var(--transition-normal);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ==========================================================================
+       HEADER & NAVIGATION
+       ========================================================================== */
+    header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-md);
+      background: var(--ig-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(225, 48, 108, 0.35);
+      color: white;
+      font-weight: 800;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+
+    .brand-titles h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      background: var(--ig-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-titles p {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .theme-toggle-btn {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.45rem 0.85rem;
+      border-radius: var(--radius-full);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+      transition: all var(--transition-fast);
+    }
+    .theme-toggle-btn:hover {
+      background: var(--bg-active);
+      border-color: var(--ig-pink);
+    }
+
+    /* TABS */
+    .nav-tabs-wrapper {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-tabs-wrapper::-webkit-scrollbar { display: none; }
+
+    .nav-tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-top: 1px solid var(--border-subtle);
+      width: 100%;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 0.85rem 1.1rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      position: relative;
+      white-space: nowrap;
+      transition: color var(--transition-fast);
+    }
+    .tab-btn:hover {
+      color: var(--text-primary);
+    }
+    .tab-btn.active {
+      color: var(--ig-pink);
+    }
+    .tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--ig-gradient);
+      border-radius: 3px 3px 0 0;
+    }
+    .tab-icon {
+      font-size: 1.1rem;
+    }
+
+    /* ==========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================== */
+    main {
+      max-width: 1440px;
+      width: 100%;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+      flex: 1;
+    }
+
+    .module-container {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .module-container.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* MODULE BANNER */
+    .module-banner {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .banner-info h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .banner-info p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      max-width: 850px;
+    }
+
+    .dsa-mapping-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--ig-gradient-subtle);
+      border: 1px solid rgba(225, 48, 108, 0.25);
+      color: var(--ig-pink);
+      padding: 0.2rem 0.65rem;
+      border-radius: var(--radius-full);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .complexity-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-full);
+      font-weight: 700;
+      font-size: 0.825rem;
+      font-family: monospace;
+      color: white;
+      box-shadow: var(--shadow-sm);
+      white-space: nowrap;
+    }
+    .badge-o1 { background-color: var(--badge-o1); }
+    .badge-ologn { background-color: var(--badge-ologn); }
+    .badge-on { background-color: var(--badge-on); }
+    .badge-onlogn { background-color: var(--badge-onlogn); }
+    .badge-on2 { background-color: var(--badge-on2); }
+
+    /* GRID LAYOUT FOR MODULE WORKSPACE */
+    .module-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .module-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .primary-stage {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .sidebar-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* CARDS */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-header h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* BUTTONS & CONTROLS */
+    .btn {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.55rem 0.95rem;
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: all var(--transition-fast);
+      user-select: none;
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--bg-active);
+      border-color: var(--border-color);
+      transform: translateY(-1px);
+    }
+    .btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--ig-gradient);
+      color: white;
+      border: none;
+      box-shadow: 0 2px 8px rgba(225, 48, 108, 0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.95;
+      box-shadow: 0 4px 14px rgba(225, 48, 108, 0.4);
+    }
+    .btn-sm {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.775rem;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    select, input[type="text"], input[type="number"] {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color var(--transition-fast);
+    }
+    select:focus, input:focus {
+      border-color: var(--ig-pink);
+    }
+
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .slider-group input[type="range"] {
+      flex: 1;
+      accent-color: var(--ig-pink);
+      cursor: pointer;
+    }
+    .slider-val {
+      min-width: 42px;
+      text-align: right;
+      font-family: monospace;
+      font-weight: 700;
+      color: var(--ig-pink);
+    }
+
+    /* OPERATIONS LOG */
+    .log-container {
+      background: var(--log-bg);
+      border-radius: var(--radius-md);
+      padding: 0.85rem;
+      color: var(--log-text);
+      font-family: "JetBrains Mono", "SF Mono", Consolas, Menlo, monospace;
+      font-size: 0.775rem;
+      height: 230px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+    }
+    .log-entry {
+      margin-bottom: 0.4rem;
+      line-height: 1.4;
+      display: flex;
+      gap: 0.5rem;
+      animation: fadeIn 0.2s ease;
+    }
+    .log-time {
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .log-op {
+      color: #f43f5e;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .log-msg {
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+    .log-bigo {
+      color: #10b981;
+      font-weight: 700;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    /* STATS CHIPS */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 0.6rem;
+    }
+    .stat-chip {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      padding: 0.6rem;
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+    .stat-chip .val {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      font-family: monospace;
+    }
+    .stat-chip .lbl {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.15rem;
+    }
+
+    /* ==========================================================================
+       MODULE 1: GRAPH SPECIFICS
+       ========================================================================== */
+    .graph-stage-wrapper {
+      position: relative;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      height: 420px;
+      overflow: hidden;
+    }
+    #graphCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+    .graph-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      display: flex;
+      gap: 0.85rem;
+      box-shadow: var(--shadow-sm);
+      opacity: 0.95;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .adj-table-container {
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.775rem;
+      font-family: monospace;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+    .adj-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .adj-table th, .adj-table td {
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .adj-table th {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .adj-table tr.highlighted {
+      background: rgba(225, 48, 108, 0.12);
+    }
+    .set-tag {
+      display: inline-block;
+      background: var(--bg-active);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      margin-right: 0.25rem;
+      margin-bottom: 0.2rem;
+      font-size: 0.72rem;
+    }
+    .set-tag.matched {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      border: 1px solid #10b981;
+      font-weight: 700;
+    }
+
+    /* ==========================================================================
+       MODULE 2: HEAP SPECIFICS
+       ========================================================================== */
+    .heap-tree-stage {
+      height: 320px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      position: relative;
+      overflow: hidden;
+    }
+    #heapCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .heap-array-view {
+      display: flex;
+      overflow-x: auto;
+      gap: 0.4rem;
+      padding: 0.75rem 0.5rem;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      scrollbar-width: thin;
+    }
+    .array-cell {
+      min-width: 52px;
+      padding: 0.35rem 0.25rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      text-align: center;
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
+    }
+    .array-cell.active-heap {
+      border-color: var(--ig-pink);
+      background: rgba(225, 48, 108, 0.15);
+      transform: translateY(-2px);
+    }
+    .array-cell .idx {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .array-cell .val {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin: 0.1rem 0;
+    }
+    .array-cell .pid {
+      font-size: 0.65rem;
+      color: var(--ig-purple);
+      font-weight: 600;
+    }
+
+    /* Heap vs Sort Bar Chart */
+    .chart-container {
+      margin-top: 0.75rem;
+    }
+    .chart-bar-group {
+      margin-bottom: 0.85rem;
+    }
+    .chart-bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+    .chart-track {
+      height: 18px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      display: flex;
+      position: relative;
+    }
+    .chart-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .chart-fill-heap { background: var(--ig-gradient); }
+    .chart-fill-sort { background: #64748b; }
+
+    /* Celebrity Problem Diagram */
+    .celebrity-card {
+      border: 1px dashed var(--ig-pink);
+      background: rgba(225, 48, 108, 0.03);
+    }
+    .arch-diagram {
+      height: 120px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      position: relative;
+      overflow: hidden;
+      padding: 0.5rem;
+    }
+    .arch-node {
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-md);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-align: center;
+      border: 1px solid var(--border-color);
+      background: var(--bg-surface);
+      z-index: 2;
+    }
+    .arch-arrow {
+      position: relative;
+      flex: 1;
+      height: 2px;
+      background: var(--border-color);
+      margin: 0 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .arch-packet {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ig-pink);
+      animation: packetMove 2s infinite linear;
+    }
+    @keyframes packetMove {
+      0% { left: 0%; opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { left: 100%; opacity: 0; }
+    }
+
+    /* ==========================================================================
+       MODULE 3: DM & FIFO QUEUE SPECIFICS
+       ========================================================================== */
+    .dm-dual-chat {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      min-height: 380px;
+    }
+    @media (max-width: 768px) {
+      .dm-dual-chat { grid-template-columns: 1fr; }
+    }
+    .chat-phone {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      background: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      height: 420px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-subtle);
+    }
+    .chat-user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .avatar-mini {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--ig-gradient);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+    .chat-thread {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .chat-msg {
+      max-width: 80%;
+      padding: 0.5rem 0.85rem;
+      border-radius: 18px;
+      font-size: 0.825rem;
+      position: relative;
+      animation: fadeIn 0.25s ease;
+      word-break: break-word;
+    }
+    .chat-msg.sent {
+      align-self: flex-end;
+      background: var(--ig-gradient);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.received {
+      align-self: flex-start;
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+    .msg-seq {
+      font-size: 0.65rem;
+      opacity: 0.8;
+      display: block;
+      margin-top: 0.2rem;
+      font-family: monospace;
+    }
+    .chat-footer {
+      padding: 0.65rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 0.5rem;
+      background: var(--bg-surface);
+    }
+    .chat-footer input {
+      flex: 1;
+      border-radius: var(--radius-full);
+    }
+
+    /* FIFO Broker Ribbon */
+    .broker-stage {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .broker-belt {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 58px;
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.5rem;
+      overflow-x: auto;
+      background: var(--bg-surface);
+    }
+    .broker-pill {
+      background: var(--ig-gradient);
+      color: white;
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      animation: slideInRight 0.3s ease;
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* DLL Visualizer */
+    .dll-wrapper {
+      display: flex;
+      align-items: center;
+      overflow-x: auto;
+      padding: 1rem 0.5rem;
+      gap: 0.5rem;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      scrollbar-width: thin;
+    }
+    .dll-node-box {
+      background: var(--bg-surface);
+      border: 2px solid var(--ig-purple);
+      border-radius: var(--radius-md);
+      padding: 0.5rem;
+      min-width: 110px;
+      text-align: center;
+      font-size: 0.75rem;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+    }
+    .dll-node-box .pointers {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.2rem;
+      margin-bottom: 0.3rem;
+      font-family: monospace;
+    }
+    .dll-arrow {
+      font-size: 1.2rem;
+      color: var(--ig-pink);
+      font-weight: 900;
+      user-select: none;
+    }
+
+    /* ==========================================================================
+       MODULE 4: STORY EDITOR SPECIFICS
+       ========================================================================== */
+    .story-workspace {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    @media (max-width: 900px) {
+      .story-workspace { grid-template-columns: 1fr; justify-items: center; }
+    }
+    .canvas-device-frame {
+      width: 270px;
+      height: 480px;
+      border: 10px solid #1a1a24;
+      border-radius: 36px;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #storyCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+    .story-overlay-controls {
+      position: absolute;
+      top: 15px;
+      right: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 10;
+    }
+    .story-icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+    .story-icon-btn:hover { background: var(--ig-pink); }
+
+    /* Dual Stacks Visualizer */
+    .stacks-side-by-side {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .stack-column {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      min-height: 280px;
+    }
+    .stack-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .stack-bucket {
+      flex: 1;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 0.4rem;
+      border-bottom: 4px solid var(--ig-purple);
+      border-left: 2px dashed var(--border-color);
+      border-right: 2px dashed var(--border-color);
+      padding: 0.4rem;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      overflow-y: auto;
+      max-height: 220px;
+    }
+    .stack-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.6rem;
+      font-size: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.85); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .stack-item.top-item {
+      border: 2px solid var(--ig-pink);
+      background: rgba(225, 48, 108, 0.08);
+      font-weight: 700;
+    }
+    .top-badge {
+      background: var(--ig-pink);
+      color: white;
+      font-size: 0.6rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+
+    /* Memory Meter */
+    .memory-compare-box {
+      background: var(--bg-subtle);
+      border-radius: var(--radius-md);
+      padding: 0.85rem;
+      border: 1px solid var(--border-subtle);
+    }
+    .memory-row {
+      margin-bottom: 0.75rem;
+    }
+    .memory-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ==========================================================================
+       MODULE 5: COMPLEXITY SUMMARY & BENCHMARK
+       ========================================================================== */
+    .summary-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      background: var(--bg-surface);
+    }
+    .complexity-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.825rem;
+      text-align: left;
+    }
+    .complexity-table th, .complexity-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .complexity-table th {
+      background: var(--bg-subtle);
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-size: 0.725rem;
+      letter-spacing: 0.05em;
+    }
+    .complexity-table tr:hover {
+      background: var(--bg-subtle);
+    }
+    .table-tag {
+      font-family: monospace;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.775rem;
+      display: inline-block;
+    }
+    .filter-pills {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .filter-pill {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-full);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+    .filter-pill.active {
+      background: var(--ig-gradient);
+      color: white;
+      border-color: transparent;
+    }
+
+    /* Benchmark Result Cards */
+    .bench-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .bench-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .bench-card h4 {
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+    .bench-metric {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 0.35rem;
+      font-family: monospace;
+    }
+
+    /* ==========================================================================
+       FOOTER
+       ========================================================================== */
+    footer {
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-color);
+      padding: 1.25rem 1.5rem;
+      margin-top: auto;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    footer span {
+      background: var(--ig-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       HEADER & NAVIGATION BAR
+       ========================================================================== -->
+  <header>
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-logo">📸</div>
+        <div class="brand-titles">
+          <h1>Instagram Under the Hood</h1>
+          <p>Interactive Data Structure & Algorithm Architecture Visualizer</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Light/Dark Theme">
+          <span id="themeIcon">🌙</span> <span id="themeText">Dark Mode</span>
+        </button>
+      </div>
+    </div>
+    <div class="nav-tabs-wrapper">
+      <nav class="nav-tabs" id="navTabs">
+        <button class="tab-btn active" data-tab="tab-graph">
+          <span class="tab-icon">🌐</span> Module 1: Social Graph
+        </button>
+        <button class="tab-btn" data-tab="tab-heap">
+          <span class="tab-icon">⚡</span> Module 2: Home Feed Heap
+        </button>
+        <button class="tab-btn" data-tab="tab-dm">
+          <span class="tab-icon">💬</span> Module 3: Direct Messaging
+        </button>
+        <button class="tab-btn" data-tab="tab-story">
+          <span class="tab-icon">🎨</span> Module 4: Story Editor
+        </button>
+        <button class="tab-btn" data-tab="tab-summary">
+          <span class="tab-icon">📊</span> Complexity Summary
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================== -->
+  <main>
+
+    <!-- ========================================================================
+         MODULE 1: SOCIAL GRAPH (DIRECTED GRAPH + HASH SETS)
+         ======================================================================== -->
+    <section class="module-container active" id="tab-graph">
+      <div class="module-banner">
+        <div class="banner-info">
+          <h2>
+            Follower / Following Social Graph
+            <span class="dsa-mapping-pill">Directed Graph + Dual Hash Sets</span>
+          </h2>
+          <p>
+            Instagram maintains two hash sets per user: an <strong>Out-Set</strong> (accounts followed) and an <strong>In-Set</strong> (followers). Mutual connections are computed in \(O(\min(d_A, d_B))\) by iterating the smaller degree set and executing \(O(1)\) hash probes against the larger set.
+          </p>
+        </div>
+        <div class="complexity-badge badge-o1" id="m1-badge">
+          Current Op: O(1)
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <!-- Main Column: Interactive Canvas & Hash Inspector -->
+        <div class="primary-stage">
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🕸️</span> Directed Social Graph Visualizer</h3>
+              <span class="card-subtitle">Arrow A &rarr; B denotes A follows B</span>
+            </div>
+
+            <!-- Controls Row -->
+            <div class="controls-row" style="margin-bottom: 1rem;">
+              <div class="form-group">
+                <label>User A (Source)</label>
+                <select id="m1UserA"></select>
+              </div>
+              <div class="form-group">
+                <label>User B (Target)</label>
+                <select id="m1UserB"></select>
+              </div>
+              <div class="form-group" style="justify-content: flex-end;">
+                <label>&nbsp;</label>
+                <div style="display: flex; gap: 0.4rem;">
+                  <button class="btn btn-primary" id="m1FollowBtn">Follow (A &rarr; B)</button>
+                  <button class="btn" id="m1UnfollowBtn">Unfollow (A &rarr; B)</button>
+                  <button class="btn" id="m1CheckBtn">Check A follows B?</button>
+                  <button class="btn" id="m1MutualBtn">Find Mutual Followers</button>
+                  <button class="btn btn-sm" id="m1ResetGraphBtn" title="Reset default graph">Reset</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Graph Canvas Stage -->
+            <div class="graph-stage-wrapper">
+              <canvas id="graphCanvas"></canvas>
+              <div class="graph-legend">
+                <div class="legend-item"><span class="legend-dot" style="background: var(--ig-purple);"></span> User A</div>
+                <div class="legend-item"><span class="legend-dot" style="background: var(--ig-yellow);"></span> User B</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> Mutual Out(A) &cap; In(B)</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #e1306c;"></span> Other Users</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hash-Indexed Adjacency Table -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🗂️</span> Hash-Indexed Dual Adjacency Table</h3>
+              <span class="card-subtitle">Internal Hash Sets: Map&lt;User, Set&lt;User&gt;&gt;</span>
+            </div>
+            <div class="adj-table-container">
+              <table class="adj-table" id="adjTable">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Out-Degree | Out-Set (Following)</th>
+                    <th>In-Degree | In-Set (Followers)</th>
+                  </tr>
+                </thead>
+                <tbody id="adjTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Column: Real-time Stats & Operations Log -->
+        <div class="sidebar-panel">
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📈</span> Connection Status & Metrics</h3>
+            </div>
+            <div class="stats-row" style="margin-bottom: 0.85rem;">
+              <div class="stat-chip">
+                <div class="val" id="m1StatFollows">No</div>
+                <div class="lbl">A Follows B?</div>
+              </div>
+              <div class="stat-chip">
+                <div class="val" id="m1StatMutuals">0</div>
+                <div class="lbl">Mutual Count</div>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-chip">
+                <div class="val" id="m1StatProbes">0</div>
+                <div class="lbl">Hash Probes</div>
+              </div>
+              <div class="stat-chip">
+                <div class="val" id="m1StatTheoretical">O(1)</div>
+                <div class="lbl">Set Complexity</div>
+              </div>
+            </div>
+
+            <!-- Algorithmic Step Breakdown Card -->
+            <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-subtle); border-radius: var(--radius-md); font-size: 0.785rem;">
+              <strong style="color: var(--ig-pink);">Algorithm Trace:</strong>
+              <div id="m1AlgoTrace" style="margin-top: 0.35rem; color: var(--text-secondary); line-height: 1.45;">
+                Select User A and User B to inspect or compute mutuals.
+              </div>
+            </div>
+          </div>
+
+          <!-- Operations Log -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📜</span> Operations Log</h3>
+              <button class="btn btn-sm" onclick="clearLog('m1Log')">Clear</button>
+            </div>
+            <div class="log-container" id="m1Log"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         MODULE 2: HOME FEED (MAX-HEAP / PRIORITY QUEUE)
+         ======================================================================== -->
+    <section class="module-container" id="tab-heap">
+      <div class="module-banner">
+        <div class="banner-info">
+          <h2>
+            Algorithmic Home Feed Ranking
+            <span class="dsa-mapping-pill">Max-Heap / Priority Queue</span>
+          </h2>
+          <p>
+            Ranks candidate posts dynamically using Floyd's \(O(N)\) bottom-up heap construction and extracts the Top-K posts in \(O(K \log N)\). Beats a full \(O(N \log N)\) Quicksort/Mergesort by avoiding useless sorting of lower-ranked posts.
+          </p>
+        </div>
+        <div class="complexity-badge badge-on" id="m2-badge">
+          Current Op: O(N) Floyd
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <div class="primary-stage">
+          <!-- Scoring Formula & Sliders Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🎛️</span> Feed Score Formula & Tuning Sliders</h3>
+              <span class="card-subtitle">Score = w₁&middot;Recency(e<sup>-&lambda;t</sup>) + w₂&middot;Affinity + w₃&middot;P(Engagement)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <div class="slider-group form-group">
+                <label>Candidates (N): <span id="m2ValN" class="slider-val">25</span></label>
+                <input type="range" id="m2SliderN" min="10" max="150" value="25">
+              </div>
+              <div class="slider-group form-group">
+                <label>Recency Weight (w₁): <span id="m2ValW1" class="slider-val">0.35</span></label>
+                <input type="range" id="m2SliderW1" min="0" max="1" step="0.05" value="0.35">
+              </div>
+              <div class="slider-group form-group">
+                <label>Affinity Weight (w₂): <span id="m2ValW2" class="slider-val">0.35</span></label>
+                <input type="range" id="m2SliderW2" min="0" max="1" step="0.05" value="0.35">
+              </div>
+              <div class="slider-group form-group">
+                <label>Engagement Weight (w₃): <span id="m2ValW3" class="slider-val">0.30</span></label>
+                <input type="range" id="m2SliderW3" min="0" max="1" step="0.05" value="0.30">
+              </div>
+              <div class="slider-group form-group">
+                <label>Decay Constant (&lambda;): <span id="m2ValLambda" class="slider-val">0.08</span></label>
+                <input type="range" id="m2SliderLambda" min="0.01" max="0.3" step="0.01" value="0.08">
+              </div>
+              <div class="slider-group form-group">
+                <label>Top-K Posts to Extract: <span id="m2ValK" class="slider-val">5</span></label>
+                <input type="range" id="m2SliderK" min="1" max="20" value="5">
+              </div>
+            </div>
+
+            <div class="controls-row" style="margin-top: 1rem;">
+              <button class="btn btn-primary" id="m2BuildHeapBtn">⚡ Build Heap (Floyd O(N))</button>
+              <button class="btn" id="m2ExtractTopKBtn">🏆 Extract Top-K (O(K log N))</button>
+              <button class="btn" id="m2InsertPostBtn">➕ Insert New Post (O(log N))</button>
+              <button class="btn" id="m2ExtractMaxBtn">🔺 Extract Max (1x)</button>
+              <button class="btn" id="m2RescoreBtn">🔄 Re-Score Candidates</button>
+            </div>
+          </div>
+
+          <!-- Tree Visualizer Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🌳</span> Complete Binary Tree Visualizer</h3>
+              <span class="card-subtitle">Max-Heap Property: Parent &ge; Children (Top 31 nodes rendered)</span>
+            </div>
+            <div class="heap-tree-stage">
+              <canvas id="heapCanvas"></canvas>
+            </div>
+
+            <!-- Array Representation Below Tree -->
+            <div style="margin-top: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                <span>Array Representation: A[i], Left=2i+1, Right=2i+2</span>
+                <span id="m2ArraySizeBadge">Size: 0</span>
+              </div>
+              <div class="heap-array-view" id="heapArrayView"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Comparison Chart & Celebrity Problem -->
+        <div class="sidebar-panel">
+          <!-- Live Comparison Card -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📊</span> Operations: Heap vs Full Sort</h3>
+            </div>
+            <div class="stats-row" style="margin-bottom: 0.75rem;">
+              <div class="stat-chip">
+                <div class="val" id="m2StatHeapOps">0</div>
+                <div class="lbl">Heap Ops</div>
+              </div>
+              <div class="stat-chip">
+                <div class="val" id="m2StatSortOps">0</div>
+                <div class="lbl">Full Sort Ops</div>
+              </div>
+            </div>
+
+            <!-- Live Bar Chart -->
+            <div class="chart-container">
+              <div class="chart-bar-group">
+                <div class="chart-bar-header">
+                  <span>Heap Top-K (Floyd O(N) + K log N)</span>
+                  <span id="m2BarHeapLabel">0 ops</span>
+                </div>
+                <div class="chart-track">
+                  <div class="chart-fill chart-fill-heap" id="m2BarHeap" style="width: 25%;"></div>
+                </div>
+              </div>
+
+              <div class="chart-bar-group">
+                <div class="chart-bar-header">
+                  <span>Full Quicksort/Mergesort (O(N log N))</span>
+                  <span id="m2BarSortLabel">0 ops</span>
+                </div>
+                <div class="chart-track">
+                  <div class="chart-fill chart-fill-sort" id="m2BarSort" style="width: 100%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Savings Badge -->
+            <div style="text-align: center; margin-top: 0.6rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
+              <span style="font-size: 0.75rem; color: #10b981; font-weight: 700;">EFFICIENCY ADVANTAGE:</span>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #10b981;" id="m2SavingsRate">0% Operations Saved</div>
+            </div>
+          </div>
+
+          <!-- The Celebrity Problem (Push vs Pull) -->
+          <div class="card celebrity-card">
+            <div class="card-header">
+              <h3><span>⭐</span> The Celebrity Problem</h3>
+              <button class="btn btn-sm btn-primary" id="m2CelebrityToggleBtn">Mode: Push (Write)</button>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.65rem;" id="m2CelebrityDesc">
+              <strong>Push Model (Fan-out on write):</strong> Post written directly to all follower inboxes. For celebrities with 50M+ followers, 1 write results in 50 million database inserts!
+            </p>
+            <div class="arch-diagram" id="m2ArchDiagram">
+              <div class="arch-node" id="archCelebrityNode">👑 @ronaldo<br><small>50M followers</small></div>
+              <div class="arch-arrow">
+                <div class="arch-packet"></div>
+                <span style="font-size: 0.65rem; color: var(--ig-pink); font-weight: 700; position: absolute; top: -16px;" id="archArrowLabel">Fan-out 50M writes</span>
+              </div>
+              <div class="arch-node">📥 Inboxes<br><small>50M Feeds</small></div>
+            </div>
+          </div>
+
+          <!-- Operations Log -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📜</span> Heap Operations Log</h3>
+              <button class="btn btn-sm" onclick="clearLog('m2Log')">Clear</button>
+            </div>
+            <div class="log-container" id="m2Log"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         MODULE 3: DIRECT MESSAGING (FIFO QUEUE + DOUBLY LINKED LIST)
+         ======================================================================== -->
+    <section class="module-container" id="tab-dm">
+      <div class="module-banner">
+        <div class="banner-info">
+          <h2>
+            Direct Messaging Architecture
+            <span class="dsa-mapping-pill">FIFO Broker Queue + Client Doubly Linked List</span>
+          </h2>
+          <p>
+            Ingress message delivery flows through a <strong>FIFO Queue</strong> in \(O(1)\). Client threads utilize a <strong>Doubly Linked List (DLL)</strong>: infinite scroll prepends older history at the head in \(O(1)\), while incoming messages append at the tail in \(O(1)\). Unread count is calculated monotonically in \(O(1)\).
+          </p>
+        </div>
+        <div class="complexity-badge badge-o1" id="m3-badge">
+          Current Op: O(1) Enqueue
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <div class="primary-stage">
+          <!-- FIFO Message Broker Live Ribbon -->
+          <div class="broker-stage">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                <span>🚚</span> Visual FIFO Message Broker Buffer: [TAIL: Ingress &rarr; HEAD: Delivery]
+              </span>
+              <span style="font-size: 0.72rem; font-family: monospace; color: var(--ig-pink);" id="m3BrokerCount">In-flight: 0 msgs</span>
+            </div>
+            <div class="broker-belt" id="brokerBelt">
+              <span style="color: var(--text-muted); font-size: 0.75rem; margin: auto;">Broker Queue Empty (Ready for messages)</span>
+            </div>
+          </div>
+
+          <!-- Dual Chat Phone Interface -->
+          <div class="dm-dual-chat">
+            <!-- Alex's Phone (Sender / Client A) -->
+            <div class="chat-phone">
+              <div class="chat-header">
+                <div class="chat-user-info">
+                  <div class="avatar-mini">A</div>
+                  <div>
+                    <strong style="font-size: 0.85rem;">@alex</strong>
+                    <div style="font-size: 0.68rem; color: #10b981;">Online &bull; Client A</div>
+                  </div>
+                </div>
+                <button class="btn btn-sm" id="m3AlexLoadHistoryBtn">Load Older (Prepend O(1))</button>
+              </div>
+              <div class="chat-thread" id="alexThread"></div>
+              <div class="chat-footer">
+                <input type="text" id="alexInput" placeholder="Message @bella..." onkeydown="if(event.key==='Enter') document.getElementById('alexSendBtn').click()">
+                <button class="btn btn-primary btn-sm" id="alexSendBtn">Send</button>
+              </div>
+            </div>
+
+            <!-- Bella's Phone (Recipient / Client B) -->
+            <div class="chat-phone">
+              <div class="chat-header">
+                <div class="chat-user-info">
+                  <div class="avatar-mini" style="background: var(--ig-yellow); color: #000;">B</div>
+                  <div>
+                    <strong style="font-size: 0.85rem;">@bella</strong>
+                    <div style="font-size: 0.68rem; color: #10b981;">Online &bull; Client B</div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                  <span id="bellaBadgeCount" style="background: #ef4444; color: white; border-radius: var(--radius-full); padding: 0.15rem 0.5rem; font-size: 0.7rem; font-weight: 800; display: none;">0</span>
+                  <button class="btn btn-sm btn-primary" id="bellaOpenChatBtn">Open Chat / Ack</button>
+                </div>
+              </div>
+              <div class="chat-thread" id="bellaThread"></div>
+              <div class="chat-footer">
+                <input type="text" id="bellaInput" placeholder="Reply to @alex..." onkeydown="if(event.key==='Enter') document.getElementById('bellaSendBtn').click()">
+                <button class="btn btn-primary btn-sm" id="bellaSendBtn">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Doubly Linked List Pointer Structure -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🔗</span> Client-Side Doubly Linked List Structure</h3>
+              <span class="card-subtitle">[prev &larr; Node(Seq, Text) &rarr; next] with Head and Tail pointers</span>
+            </div>
+            <div class="dll-wrapper" id="dllWrapper"></div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Unread Badge Formula & Log -->
+        <div class="sidebar-panel">
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🔔</span> Monotonic Unread Sync</h3>
+            </div>
+            <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: var(--radius-md); font-family: monospace; font-size: 0.775rem; border: 1px solid var(--border-subtle); margin-bottom: 0.75rem;">
+              <strong style="color: var(--ig-pink);">Formula:</strong><br>
+              Unread = Seq<sub>Latest_Delivered</sub> - Seq<sub>Last_Read_Ack</sub>
+            </div>
+            <div class="stats-row" style="margin-bottom: 0.75rem;">
+              <div class="stat-chip">
+                <div class="val" id="m3StatLatestSeq">0</div>
+                <div class="lbl">Seq Latest</div>
+              </div>
+              <div class="stat-chip">
+                <div class="val" id="m3StatAckSeq">0</div>
+                <div class="lbl">Seq Read Ack</div>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-chip" style="grid-column: span 2;">
+                <div class="val" id="m3StatUnreadVal" style="color: #ef4444;">0</div>
+                <div class="lbl">Unread Messages Badge</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Operations Log -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📜</span> DM Operations Log</h3>
+              <button class="btn btn-sm" onclick="clearLog('m3Log')">Clear</button>
+            </div>
+            <div class="log-container" id="m3Log"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         MODULE 4: STORY EDITOR (DUAL LIFO STACK + COMMAND PATTERN)
+         ======================================================================== -->
+    <section class="module-container" id="tab-story">
+      <div class="module-banner">
+        <div class="banner-info">
+          <h2>
+            Story Editor Undo/Redo Engine
+            <span class="dsa-mapping-pill">Dual LIFO Stacks + Command Pattern</span>
+          </h2>
+          <p>
+            Each editorial alteration executes as an invertible <strong>Command Object</strong> pushed to an <strong>Undo Stack</strong> in \(O(1)\). Undoing pops and pushes to the <strong>Redo Stack</strong>. A bounded capacity \(S_{\max} = 50\) discards oldest operations at the bottom. Storing command deltas saves over 99.9% memory compared to raw 8.3 MB canvas snapshots.
+          </p>
+        </div>
+        <div class="complexity-badge badge-o1" id="m4-badge">
+          Current Op: O(1) Push
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <div class="primary-stage">
+          <!-- Story Editor Controls & Canvas -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>🎨</span> Interactive 9:16 Canvas Story Editor</h3>
+              <div style="display: flex; gap: 0.4rem;">
+                <button class="btn btn-primary btn-sm" id="m4UndoBtn" disabled>↩️ Undo (O(1))</button>
+                <button class="btn btn-primary btn-sm" id="m4RedoBtn" disabled>↪️ Redo (O(1))</button>
+                <button class="btn btn-sm" id="m4ClearCanvasBtn">Reset</button>
+              </div>
+            </div>
+
+            <!-- Workspace layout -->
+            <div class="story-workspace">
+              <!-- Mobile Phone Story Frame -->
+              <div class="canvas-device-frame">
+                <canvas id="storyCanvas" width="270" height="480"></canvas>
+                <div class="story-overlay-controls">
+                  <button class="story-icon-btn" title="Vignette / Frame" id="m4ToolFrame">🖼️</button>
+                  <button class="story-icon-btn" title="Add Fire Sticker" id="m4StickerFire">🔥</button>
+                  <button class="story-icon-btn" title="Add Heart Sticker" id="m4StickerHeart">❤️</button>
+                  <button class="story-icon-btn" title="Add Star Sticker" id="m4StickerStar">⭐</button>
+                </div>
+              </div>
+
+              <!-- Tool Palette -->
+              <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+                <!-- Filters Palette -->
+                <div class="form-group">
+                  <label>Apply Color Grade Filter</label>
+                  <div class="controls-row">
+                    <button class="btn btn-sm" onclick="m4ApplyFilter('valencia')">Valencia (Warm)</button>
+                    <button class="btn btn-sm" onclick="m4ApplyFilter('mono')">Mono (B&W)</button>
+                    <button class="btn btn-sm" onclick="m4ApplyFilter('clarendon')">Clarendon (Cyan)</button>
+                    <button class="btn btn-sm" onclick="m4ApplyFilter('sunset')">Sunset Pink</button>
+                  </div>
+                </div>
+
+                <!-- Text Overlay -->
+                <div class="form-group">
+                  <label>Add Text Overlay</label>
+                  <div style="display: flex; gap: 0.4rem;">
+                    <input type="text" id="m4TextInput" placeholder="e.g. Pune Diaries ✨" value="DSA Activity 🚀" style="flex: 1;">
+                    <button class="btn btn-primary btn-sm" id="m4AddTextBtn">Add Text</button>
+                  </div>
+                </div>
+
+                <!-- Freehand Brush -->
+                <div class="form-group">
+                  <label>Brush Drawing Stroke</label>
+                  <div class="controls-row">
+                    <button class="btn btn-sm" onclick="m4DrawPresetStroke('#ff0055')">Draw Neon Pink</button>
+                    <button class="btn btn-sm" onclick="m4DrawPresetStroke('#ffcc00')">Draw Gold Spark</button>
+                    <button class="btn btn-sm" onclick="m4DrawPresetStroke('#00e5ff')">Draw Cyan Glow</button>
+                  </div>
+                </div>
+
+                <!-- Memory Comparison Card -->
+                <div class="memory-compare-box">
+                  <div style="font-size: 0.8rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+                    <span>💾 Memory Usage: Delta vs Snapshot</span>
+                    <span style="color: #10b981;" id="m4MemorySavedPercent">99.9% Saved</span>
+                  </div>
+                  <div class="memory-row">
+                    <div class="memory-label">
+                      <span>Command Pattern Deltas (~250 B/cmd)</span>
+                      <span id="m4DeltaMemoryText">0.00 KB</span>
+                    </div>
+                    <div class="chart-track">
+                      <div class="chart-fill" id="m4DeltaMemoryBar" style="width: 2%; background: #10b981;"></div>
+                    </div>
+                  </div>
+                  <div class="memory-row">
+                    <div class="memory-label">
+                      <span>Full 1080x1920 RGBA Snapshots (8.29 MB/state)</span>
+                      <span id="m4SnapshotMemoryText">0.00 MB</span>
+                    </div>
+                    <div class="chart-track">
+                      <div class="chart-fill" id="m4SnapshotMemoryBar" style="width: 100%; background: #ef4444;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Dual Vertical Stacks & Capacity Gauge -->
+        <div class="sidebar-panel">
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📚</span> Dual LIFO Stacks</h3>
+              <span class="card-subtitle">Bounded Capacity S<sub>max</sub> = 50</span>
+            </div>
+
+            <!-- Capacity Meter -->
+            <div style="margin-bottom: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.25rem;">
+                <span>Stack Capacity Meter</span>
+                <span id="m4CapacityText" style="font-weight: 700; font-family: monospace;">0 / 50</span>
+              </div>
+              <div class="chart-track" style="height: 8px;">
+                <div class="chart-fill" id="m4CapacityBar" style="width: 0%; background: var(--ig-gradient);"></div>
+              </div>
+            </div>
+
+            <!-- Side-by-Side Vertical Stack Containers -->
+            <div class="stacks-side-by-side">
+              <!-- Undo Stack -->
+              <div class="stack-column">
+                <div class="stack-header-bar">
+                  <span>Undo Stack</span>
+                  <span id="m4UndoCount" style="color: var(--ig-pink);">0</span>
+                </div>
+                <div class="stack-bucket" id="m4UndoBucket">
+                  <div style="color: var(--text-muted); font-size: 0.72rem; text-align: center; margin: auto;">[Empty Stack]</div>
+                </div>
+              </div>
+
+              <!-- Redo Stack -->
+              <div class="stack-column">
+                <div class="stack-header-bar">
+                  <span>Redo Stack</span>
+                  <span id="m4RedoCount" style="color: var(--ig-purple);">0</span>
+                </div>
+                <div class="stack-bucket" id="m4RedoBucket">
+                  <div style="color: var(--text-muted); font-size: 0.72rem; text-align: center; margin: auto;">[Empty Stack]</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Operations Log -->
+          <div class="card">
+            <div class="card-header">
+              <h3><span>📜</span> Stack Operations Log</h3>
+              <button class="btn btn-sm" onclick="clearLog('m4Log')">Clear</button>
+            </div>
+            <div class="log-container" id="m4Log"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         MODULE 5: COMPLEXITY SUMMARY & LIVE BENCHMARK
+         ======================================================================== -->
+    <section class="module-container" id="tab-summary">
+      <div class="module-banner">
+        <div class="banner-info">
+          <h2>
+            Complexity Summary & Live Algorithmic Benchmark
+            <span class="dsa-mapping-pill">Big-O Matrix & Empirical Profiler</span>
+          </h2>
+          <p>
+            Formal asymptotic complexity verification across all four core Instagram engineering modules. Run the live synthetic benchmark to empirically measure real microsecond latency and operation counters in your browser.
+          </p>
+        </div>
+        <button class="btn btn-primary" id="runLiveBenchmarkBtn" style="padding: 0.65rem 1.25rem;">
+          🚀 Run Live Benchmark
+        </button>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="filter-pills" id="complexityFilterPills">
+        <button class="filter-pill active" data-filter="all">All Modules</button>
+        <button class="filter-pill" data-filter="graph">Follower Graph</button>
+        <button class="filter-pill" data-filter="heap">Home Feed Heap</button>
+        <button class="filter-pill" data-filter="dm">Direct Messaging</button>
+        <button class="filter-pill" data-filter="story">Story Editor</button>
+      </div>
+
+      <!-- Complexity Table -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+          <h3><span>📋</span> Asymptotic Complexity Matrix</h3>
+          <span class="card-subtitle">Theoretical bounds across operations</span>
+        </div>
+        <div class="summary-table-wrapper">
+          <table class="complexity-table">
+            <thead>
+              <tr>
+                <th>Feature Module</th>
+                <th>Data Structure</th>
+                <th>Operation</th>
+                <th>Best Case</th>
+                <th>Average Case</th>
+                <th>Worst Case</th>
+                <th>Space Complexity</th>
+              </tr>
+            </thead>
+            <tbody id="complexityTableBody">
+              <!-- Follower Graph -->
+              <tr data-cat="graph">
+                <td><strong>Follower Graph</strong></td>
+                <td>Hash Set Adjacency Table</td>
+                <td>Check Follower (Does A follow B?)</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-on">O(deg(A))*</span></td>
+                <td><span class="table-tag badge-on">O(V + E)</span></td>
+              </tr>
+              <tr data-cat="graph">
+                <td><strong>Follower Graph</strong></td>
+                <td>Hash Set Adjacency Table</td>
+                <td>Add Edge (Follow User)</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1) amortized</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+              </tr>
+              <tr data-cat="graph">
+                <td><strong>Follower Graph</strong></td>
+                <td>Hash Set Adjacency Table</td>
+                <td>Compute Mutuals Out(A) &cap; In(B)</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-on">O(min(dA, dB))</span></td>
+                <td><span class="table-tag badge-on">O(V)</span></td>
+                <td><span class="table-tag badge-on">O(min(dA, dB))</span></td>
+              </tr>
+
+              <!-- Home Feed -->
+              <tr data-cat="heap">
+                <td><strong>Home Feed</strong></td>
+                <td>Max-Heap (Binary Heap)</td>
+                <td>Build Heap (Floyd's Algorithm)</td>
+                <td><span class="table-tag badge-on">O(N)</span></td>
+                <td><span class="table-tag badge-on">O(N)</span></td>
+                <td><span class="table-tag badge-on">O(N)</span></td>
+                <td><span class="table-tag badge-o1">O(1) in-place</span></td>
+              </tr>
+              <tr data-cat="heap">
+                <td><strong>Home Feed</strong></td>
+                <td>Max-Heap (Binary Heap)</td>
+                <td>Extract Top-K Ranked Posts</td>
+                <td><span class="table-tag badge-ologn">O(K log N)</span></td>
+                <td><span class="table-tag badge-ologn">O(K log N)</span></td>
+                <td><span class="table-tag badge-ologn">O(K log N)</span></td>
+                <td><span class="table-tag badge-o1">O(K)</span></td>
+              </tr>
+              <tr data-cat="heap">
+                <td><strong>Home Feed</strong></td>
+                <td>Bounded Min-Heap</td>
+                <td>Stream Top-K Candidates</td>
+                <td><span class="table-tag badge-ologn">O(N)</span></td>
+                <td><span class="table-tag badge-ologn">O(N log K)</span></td>
+                <td><span class="table-tag badge-ologn">O(N log K)</span></td>
+                <td><span class="table-tag badge-ologn">O(K)</span></td>
+              </tr>
+
+              <!-- Direct Messaging -->
+              <tr data-cat="dm">
+                <td><strong>Direct Messaging</strong></td>
+                <td>FIFO Broker Queue</td>
+                <td>Enqueue / Dequeue Ingress Msg</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-on">O(Q)</span></td>
+              </tr>
+              <tr data-cat="dm">
+                <td><strong>Direct Messaging</strong></td>
+                <td>Doubly Linked List (DLL)</td>
+                <td>Prepend (Older History) / Append (New Msg)</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-on">O(M)</span></td>
+              </tr>
+
+              <!-- Story Editor -->
+              <tr data-cat="story">
+                <td><strong>Story Editor</strong></td>
+                <td>Dual LIFO Bounded Stack</td>
+                <td>Push / Pop Action Command</td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(1)</span></td>
+                <td><span class="table-tag badge-o1">O(S), S &le; 50</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.6rem;">
+          * Worst case Hash Set lookup degrades only under adversarial bucket collision degradation; expected load factor maintains true \(O(1)\).
+        </p>
+      </div>
+
+      <!-- Live Benchmark Output Cards -->
+      <div class="card">
+        <div class="card-header">
+          <h3><span>⚡</span> Live Benchmark Empirical Measurements</h3>
+          <span class="card-subtitle" id="benchmarkStatus">Click "Run Live Benchmark" above to test</span>
+        </div>
+        <div class="bench-grid" id="benchmarkGrid">
+          <div class="bench-card">
+            <h4>1. Social Graph: Hash Probe vs Array Scan</h4>
+            <div class="bench-metric"><span>Elements (N):</span> <span>10,000</span></div>
+            <div class="bench-metric"><span>Hash Set Probe:</span> <span id="b1HashTime" style="color: #10b981;">--</span></div>
+            <div class="bench-metric"><span>Array Linear Scan:</span> <span id="b1ArrayTime" style="color: #ef4444;">--</span></div>
+            <div class="bench-metric"><span>Speedup Factor:</span> <span id="b1Speedup" style="font-weight: 700;">--</span></div>
+          </div>
+
+          <div class="bench-card">
+            <h4>2. Home Feed: Floyd's O(N) vs Repeated Insert</h4>
+            <div class="bench-metric"><span>Items (N):</span> <span>50,000</span></div>
+            <div class="bench-metric"><span>Floyd Bottom-Up O(N):</span> <span id="b2FloydTime" style="color: #10b981;">--</span></div>
+            <div class="bench-metric"><span>Repeated SiftUp O(N log N):</span> <span id="b2InsertTime" style="color: #f59e0b;">--</span></div>
+            <div class="bench-metric"><span>Speedup Factor:</span> <span id="b2Speedup" style="font-weight: 700;">--</span></div>
+          </div>
+
+          <div class="bench-card">
+            <h4>3. Home Feed: Top-K Extraction vs Array.sort()</h4>
+            <div class="bench-metric"><span>Items (N), K:</span> <span>50,000 (K=10)</span></div>
+            <div class="bench-metric"><span>Heap Top-10:</span> <span id="b3HeapTime" style="color: #10b981;">--</span></div>
+            <div class="bench-metric"><span>Full Sort O(N log N):</span> <span id="b3SortTime" style="color: #ef4444;">--</span></div>
+            <div class="bench-metric"><span>Efficiency Ratio:</span> <span id="b3Speedup" style="font-weight: 700;">--</span></div>
+          </div>
+
+          <div class="bench-card">
+            <h4>4. Direct Messaging: DLL Prepend vs Array.unshift()</h4>
+            <div class="bench-metric"><span>Prepends (N):</span> <span>25,000</span></div>
+            <div class="bench-metric"><span>DLL Prepend O(1):</span> <span id="b4DllTime" style="color: #10b981;">--</span></div>
+            <div class="bench-metric"><span>Array.unshift O(N):</span> <span id="b4UnshiftTime" style="color: #ef4444;">--</span></div>
+            <div class="bench-metric"><span>Speedup Factor:</span> <span id="b4Speedup" style="font-weight: 700;">--</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+       FOOTER (ZEAL COLLEGE OF ENGINEERING AND RESEARCH, PUNE)
+       ========================================================================== -->
+  <footer>
+    <p>
+      Data Structures & Algorithms Activity | <span>Zeal College of Engineering and Research, Pune</span>
+    </p>
+  </footer>
+
+  <!-- ==========================================================================
+       VANILLA JAVASCRIPT: DATA STRUCTURE IMPLEMENTATIONS & ENGINE
+       ========================================================================== -->
+  <script>
+    /* ==========================================================================
+       0. UTILITIES, THEME & LOGGING
+       ========================================================================== */
+    function logOp(containerId, op, message, bigO) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+      entry.innerHTML = `
+        <span class="log-time">[${timeStr}]</span>
+        <span class="log-op">${escapeHtml(op)}</span>
+        <span class="log-msg">${escapeHtml(message)}</span>
+        ${bigO ? `<span class="log-bigo">${escapeHtml(bigO)}</span>` : ''}
+      `;
+      container.prepend(entry);
+    }
+
+    function clearLog(containerId) {
+      const container = document.getElementById(containerId);
+      if (container) container.innerHTML = '';
+    }
+
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return str;
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Theme toggle
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
+
+    themeToggleBtn.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      themeIcon.textContent = newTheme === 'light' ? '🌙' : '☀️';
+      themeText.textContent = newTheme === 'light' ? 'Dark Mode' : 'Light Mode';
+      // Redraw canvases
+      if (graphVisualizer) graphVisualizer.draw();
+      if (heapVisualizer) heapVisualizer.draw();
+      if (storyApp) storyApp.redrawCanvas();
+    });
+
+    // Navigation Tabs
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const moduleContainers = document.querySelectorAll('.module-container');
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        moduleContainers.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-tab');
+        const targetModule = document.getElementById(targetId);
+        if (targetModule) {
+          targetModule.classList.add('active');
+          if (targetId === 'tab-graph' && graphVisualizer) graphVisualizer.resize();
+          if (targetId === 'tab-heap' && heapVisualizer) heapVisualizer.resize();
+          if (targetId === 'tab-story' && storyApp) storyApp.resize();
+        }
+      });
+    });
+
+    /* ==========================================================================
+       DATA STRUCTURE 1: DIRECTED SOCIAL GRAPH WITH DUAL HASH SETS
+       ========================================================================== */
+    /**
+     * DirectedSocialGraph
+     * Maintains two Hash Sets per vertex:
+     * - outEdges: Map<userId, Set<targetUserId>> (Adjacency list: users that 'userId' follows)
+     * - inEdges:  Map<userId, Set<sourceUserId>> (Reverse adjacency: users that follow 'userId')
+     */
+    class DirectedSocialGraph {
+      constructor() {
+        this.users = new Map();     // userId -> { id, handle, name, avatarColor }
+        this.outEdges = new Map();  // userId -> Set<userId> (Following)
+        this.inEdges = new Map();   // userId -> Set<userId> (Followers)
+      }
+
+      /**
+       * Add a new user vertex into the graph
+       * Time Complexity: O(1)
+       * Space Complexity: O(1)
+       */
+      addUser(id, handle, name, avatarColor) {
+        if (!this.users.has(id)) {
+          this.users.set(id, { id, handle, name, avatarColor });
+          this.outEdges.set(id, new Set());
+          this.inEdges.set(id, new Set());
+        }
+      }
+
+      /**
+       * Add directed edge from -> to (User 'from' follows User 'to')
+       * Time Complexity: O(1) amortized hash set insertion
+       * Space Complexity: O(1)
+       */
+      follow(from, to) {
+        if (from === to) return false;
+        if (!this.users.has(from) || !this.users.has(to)) return false;
+
+        const outSet = this.outEdges.get(from);
+        const inSet = this.inEdges.get(to);
+
+        if (outSet.has(to)) return false; // Already following
+
+        outSet.add(to);
+        inSet.add(from);
+        return true;
+      }
+
+      /**
+       * Remove directed edge from -> to (User 'from' unfollows User 'to')
+       * Time Complexity: O(1) average hash set deletion
+       * Space Complexity: O(1)
+       */
+      unfollow(from, to) {
+        if (!this.users.has(from) || !this.users.has(to)) return false;
+        const outSet = this.outEdges.get(from);
+        const inSet = this.inEdges.get(to);
+
+        const deletedOut = outSet.delete(to);
+        const deletedIn = inSet.delete(from);
+        return deletedOut && deletedIn;
+      }
+
+      /**
+       * Check if User 'from' follows User 'to'
+       * Time Complexity: O(1) average hash probe
+       */
+      doesFollow(from, to) {
+        if (!this.outEdges.has(from)) return false;
+        return this.outEdges.get(from).has(to);
+      }
+
+      /**
+       * Get Out-Degree of user: number of accounts user follows
+       * Time Complexity: O(1)
+       */
+      getFollowingCount(userId) {
+        return this.outEdges.has(userId) ? this.outEdges.get(userId).size : 0;
+      }
+
+      /**
+       * Get In-Degree of user: number of accounts following user
+       * Time Complexity: O(1)
+       */
+      getFollowersCount(userId) {
+        return this.inEdges.has(userId) ? this.inEdges.get(userId).size : 0;
+      }
+
+      /**
+       * Compute Mutual Connections: Out(A) ∩ In(B)
+       * Definition: Users that User A follows, who ALSO follow User B.
+       * Algorithm:
+       *   1. Let SetA = Out(A), SetB = In(B).
+       *   2. Pick smaller set: if |SetA| <= |SetB|, iterate SetA and probe SetB.
+       *   3. Total hash probes = min(|Out(A)|, |In(B)|).
+       * Time Complexity: O(min(dA, dB)) where dA = |Out(A)|, dB = |In(B)|
+       * Space Complexity: O(min(dA, dB)) to store the intersection result
+       */
+      computeMutuals(userA, userB) {
+        const outA = this.outEdges.get(userA) || new Set();
+        const inB = this.inEdges.get(userB) || new Set();
+
+        const sizeA = outA.size;
+        const sizeB = inB.size;
+
+        const mutuals = [];
+        let probeCount = 0;
+        const steps = [];
+
+        if (sizeA <= sizeB) {
+          steps.push(`|Out(A)|=${sizeA} <= |In(B)|=${sizeB}. Iterating smaller set Out(${userA}) [${sizeA} items]`);
+          for (const candidate of outA) {
+            probeCount++;
+            const isMatch = inB.has(candidate);
+            steps.push(`Probe #${probeCount}: Does In(${userB}) have @${candidate}? -> ${isMatch ? 'MATCH (mutual)' : 'No'}`);
+            if (isMatch) mutuals.push(candidate);
+          }
+        } else {
+          steps.push(`|In(B)|=${sizeB} < |Out(A)|=${sizeA}. Iterating smaller set In(${userB}) [${sizeB} items]`);
+          for (const candidate of inB) {
+            probeCount++;
+            const isMatch = outA.has(candidate);
+            steps.push(`Probe #${probeCount}: Does Out(${userA}) have @${candidate}? -> ${isMatch ? 'MATCH (mutual)' : 'No'}`);
+            if (isMatch) mutuals.push(candidate);
+          }
+        }
+
+        return {
+          mutuals,
+          probeCount,
+          sizeA,
+          sizeB,
+          smallerSet: sizeA <= sizeB ? `Out(${userA})` : `In(${userB})`,
+          complexity: `O(min(${sizeA}, ${sizeB})) = O(${Math.min(sizeA, sizeB)})`,
+          steps
+        };
+      }
+    }
+
+    /* ==========================================================================
+       DATA STRUCTURE 2: MAX-HEAP / PRIORITY QUEUE
+       ========================================================================== */
+    /**
+     * MaxHeap
+     * Complete binary tree represented contiguously in an array.
+     * Properties:
+     * - Parent of i: Math.floor((i - 1) / 2)
+     * - Left child:  2 * i + 1
+     * - Right child: 2 * i + 2
+     */
+    class MaxHeap {
+      constructor() {
+        this.heap = [];
+        this.comparisons = 0;
+        this.swaps = 0;
+      }
+
+      resetStats() {
+        this.comparisons = 0;
+        this.swaps = 0;
+      }
+
+      size() {
+        return this.heap.length;
+      }
+
+      parent(i) { return Math.floor((i - 1) / 2); }
+      leftChild(i) { return 2 * i + 1; }
+      rightChild(i) { return 2 * i + 2; }
+
+      /**
+       * Sift Up: restores heap property after insertion at the end
+       * Time Complexity: O(log N)
+       */
+      siftUp(i) {
+        while (i > 0) {
+          const p = this.parent(i);
+          this.comparisons++;
+          if (this.heap[i].score > this.heap[p].score) {
+            this.swap(i, p);
+            i = p;
+          } else {
+            break;
+          }
+        }
+      }
+
+      /**
+       * Sift Down: restores heap property from index i downward
+       * Time Complexity: O(log N)
+       */
+      siftDown(i, n = this.heap.length) {
+        while (true) {
+          let largest = i;
+          const left = this.leftChild(i);
+          const right = this.rightChild(i);
+
+          if (left < n) {
+            this.comparisons++;
+            if (this.heap[left].score > this.heap[largest].score) {
+              largest = left;
+            }
+          }
+
+          if (right < n) {
+            this.comparisons++;
+            if (this.heap[right].score > this.heap[largest].score) {
+              largest = right;
+            }
+          }
+
+          if (largest !== i) {
+            this.swap(i, largest);
+            i = largest;
+          } else {
+            break;
+          }
+        }
+      }
+
+      swap(i, j) {
+        this.swaps++;
+        const temp = this.heap[i];
+        this.heap[i] = this.heap[j];
+        this.heap[j] = temp;
+      }
+
+      /**
+       * Floyd's Bottom-Up Heap Construction
+       * Transforms an arbitrary array into a valid Max-Heap in-place.
+       * Starts at the last non-leaf node: Math.floor(N / 2) - 1 down to 0.
+       * Time Complexity: O(N) mathematically proven (sum of h/2^h converges to 2)
+       * Space Complexity: O(1) in-place
+       */
+      buildHeapFloyd(items) {
+        this.resetStats();
+        this.heap = [...items];
+        const n = this.heap.length;
+        const lastNonLeaf = Math.floor(n / 2) - 1;
+
+        for (let i = lastNonLeaf; i >= 0; i--) {
+          this.siftDown(i, n);
+        }
+      }
+
+      /**
+       * Insert a new post
+       * Time Complexity: O(log N)
+       */
+      insert(post) {
+        this.heap.push(post);
+        this.siftUp(this.heap.length - 1);
+      }
+
+      /**
+       * Extract Maximum score post (Root)
+       * Time Complexity: O(log N)
+       */
+      extractMax() {
+        if (this.heap.length === 0) return null;
+        if (this.heap.length === 1) return this.heap.pop();
+
+        const root = this.heap[0];
+        this.heap[0] = this.heap.pop();
+        this.siftDown(0);
+        return root;
+      }
+
+      /**
+       * Extract Top-K ranked posts
+       * Time Complexity: O(K log N)
+       */
+      extractTopK(k) {
+        const topK = [];
+        const copyHeap = new MaxHeap();
+        copyHeap.heap = this.heap.map(p => ({ ...p }));
+        copyHeap.resetStats();
+
+        const limit = Math.min(k, copyHeap.size());
+        for (let i = 0; i < limit; i++) {
+          topK.push(copyHeap.extractMax());
+        }
+
+        return {
+          topK,
+          comparisons: copyHeap.comparisons,
+          swaps: copyHeap.swaps
+        };
+      }
+    }
+
+    /**
+     * Pure Quicksort for comparison metrics (no built-in sort)
+     * Time Complexity: O(N log N) average
+     */
+    function countQuicksortComparisons(arr) {
+      let comps = 0;
+      function qs(items, low, high) {
+        if (low < high) {
+          const pivotIdx = partition(items, low, high);
+          qs(items, low, pivotIdx - 1);
+          qs(items, pivotIdx + 1, high);
+        }
+      }
+
+      function partition(items, low, high) {
+        const pivot = items[high].score;
+        let i = low - 1;
+        for (let j = low; j < high; j++) {
+          comps++;
+          if (items[j].score >= pivot) {
+            i++;
+            const t = items[i]; items[i] = items[j]; items[j] = t;
+          }
+        }
+        const t = items[i + 1]; items[i + 1] = items[high]; items[high] = t;
+        return i + 1;
+      }
+
+      const copy = arr.map(x => ({ ...x }));
+      qs(copy, 0, copy.length - 1);
+      return comps;
+    }
+
+    /* ==========================================================================
+       DATA STRUCTURE 3: FIFO QUEUE & DOUBLY LINKED LIST
+       ========================================================================== */
+    /**
+     * FIFO Queue Node
+     */
+    class QueueNode {
+      constructor(value) {
+        this.value = value;
+        this.next = null;
+      }
+    }
+
+    /**
+     * FIFOQueue
+     * Ingress Message Broker
+     * Time Complexity: Enqueue O(1), Dequeue O(1)
+     */
+    class FIFOQueue {
+      constructor() {
+        this.head = null;
+        this.tail = null;
+        this.length = 0;
+      }
+
+      /**
+       * Enqueue message at tail
+       * Time Complexity: O(1)
+       */
+      enqueue(value) {
+        const node = new QueueNode(value);
+        if (!this.tail) {
+          this.head = node;
+          this.tail = node;
+        } else {
+          this.tail.next = node;
+          this.tail = node;
+        }
+        this.length++;
+      }
+
+      /**
+       * Dequeue message from head
+       * Time Complexity: O(1)
+       */
+      dequeue() {
+        if (!this.head) return null;
+        const val = this.head.value;
+        this.head = this.head.next;
+        if (!this.head) this.tail = null;
+        this.length--;
+        return val;
+      }
+
+      isEmpty() {
+        return this.length === 0;
+      }
+
+      toArray() {
+        const result = [];
+        let curr = this.head;
+        while (curr) {
+          result.push(curr.value);
+          curr = curr.next;
+        }
+        return result;
+      }
+    }
+
+    /**
+     * Doubly Linked List Node
+     */
+    class DLLNode {
+      constructor(data) {
+        this.data = data; // { seq, sender, recipient, text, time }
+        this.prev = null;
+        this.next = null;
+      }
+    }
+
+    /**
+     * DoublyLinkedList
+     * Client-side chat message thread
+     * Supports:
+     * - Prepend (Load older messages at head): O(1)
+     * - Append (New message at tail): O(1)
+     */
+    class DoublyLinkedList {
+      constructor() {
+        this.head = null;
+        this.tail = null;
+        this.size = 0;
+      }
+
+      /**
+       * Prepend node at head (Used when scrolling up to fetch older chat history)
+       * Time Complexity: O(1)
+       */
+      prepend(data) {
+        const node = new DLLNode(data);
+        if (!this.head) {
+          this.head = node;
+          this.tail = node;
+        } else {
+          node.next = this.head;
+          this.head.prev = node;
+          this.head = node;
+        }
+        this.size++;
+        return node;
+      }
+
+      /**
+       * Append node at tail (Used when sending or receiving real-time message)
+       * Time Complexity: O(1)
+       */
+      append(data) {
+        const node = new DLLNode(data);
+        if (!this.tail) {
+          this.head = node;
+          this.tail = node;
+        } else {
+          this.tail.next = node;
+          node.prev = this.tail;
+          this.tail = node;
+        }
+        this.size++;
+        return node;
+      }
+
+      toArray() {
+        const items = [];
+        let curr = this.head;
+        while (curr) {
+          items.push(curr.data);
+          curr = curr.next;
+        }
+        return items;
+      }
+    }
+
+    /* ==========================================================================
+       DATA STRUCTURE 4: BOUNDED LIFO STACK & COMMAND PATTERN
+       ========================================================================== */
+    /**
+     * BoundedStack
+     * LIFO Stack with maximum capacity S_max = 50.
+     * When capacity is exceeded upon push, drops oldest element at bottom (index 0).
+     * Time Complexity:
+     * - Push: O(1)
+     * - Pop:  O(1)
+     * - Peek: O(1)
+     */
+    class BoundedStack {
+      constructor(maxCapacity = 50) {
+        this.items = [];
+        this.maxCapacity = maxCapacity;
+      }
+
+      /**
+       * Push command onto stack
+       * Time Complexity: O(1)
+       */
+      push(item) {
+        if (this.items.length >= this.maxCapacity) {
+          this.items.shift(); // Evict bottom-most (oldest) command
+        }
+        this.items.push(item);
+      }
+
+      /**
+       * Pop command from top
+       * Time Complexity: O(1)
+       */
+      pop() {
+        if (this.isEmpty()) return null;
+        return this.items.pop();
+      }
+
+      peek() {
+        if (this.isEmpty()) return null;
+        return this.items[this.items.length - 1];
+      }
+
+      isEmpty() {
+        return this.items.length === 0;
+      }
+
+      size() {
+        return this.items.length;
+      }
+
+      clear() {
+        this.items = [];
+      }
+
+      toArray() {
+        return [...this.items];
+      }
+    }
+
+    /**
+     * Command Object for Story Editor
+     */
+    class StoryCommand {
+      constructor(type, description, executeFn, unexecuteFn, deltaBytes = 250) {
+        this.id = Math.random().toString(36).substr(2, 6);
+        this.type = type; // 'filter' | 'sticker' | 'text' | 'draw' | 'frame'
+        this.description = description;
+        this.execute = executeFn;
+        this.unexecute = unexecuteFn;
+        this.deltaBytes = deltaBytes;
+        this.timestamp = new Date();
+      }
+    }
+
+    /* ==========================================================================
+       MODULE 1 IMPLEMENTATION: GRAPH CONTROLLER & VISUALIZER
+       ========================================================================== */
+    class GraphVisualizer {
+      constructor() {
+        this.graph = new DirectedSocialGraph();
+        this.canvas = document.getElementById('graphCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.userASelect = document.getElementById('m1UserA');
+        this.userBSelect = document.getElementById('m1UserB');
+        this.nodePositions = new Map();
+        this.activeMutuals = new Set();
+        this.lastCheckedFollow = null;
+
+        this.initUsers();
+        this.initEventListeners();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+
+      initUsers() {
+        const preloaded = [
+          { id: 'alex', handle: '@alex', name: 'Alex Rivera', color: '#833ab4' },
+          { id: 'bella', handle: '@bella', name: 'Bella Thorne', color: '#e1306c' },
+          { id: 'chris', handle: '@chris', name: 'Chris Evans', color: '#fd1d1d' },
+          { id: 'diana', handle: '@diana', name: 'Diana Prince', color: '#f77737' },
+          { id: 'ethan', handle: '@ethan', name: 'Ethan Hunt', color: '#fcaf45' },
+          { id: 'farah', handle: '@farah', name: 'Farah Khan', color: '#10b981' }
+        ];
+
+        this.graph = new DirectedSocialGraph();
+        this.userASelect.innerHTML = '';
+        this.userBSelect.innerHTML = '';
+
+        preloaded.forEach(u => {
+          this.graph.addUser(u.id, u.handle, u.name, u.color);
+          const optA = document.createElement('option');
+          optA.value = u.id;
+          optA.textContent = `${u.handle} (${u.name})`;
+          this.userASelect.appendChild(optA);
+
+          const optB = document.createElement('option');
+          optB.value = u.id;
+          optB.textContent = `${u.handle} (${u.name})`;
+          this.userBSelect.appendChild(optB);
+        });
+
+        this.userASelect.value = 'alex';
+        this.userBSelect.value = 'bella';
+
+        // Preload rich directed edges
+        this.graph.follow('alex', 'bella');
+        this.graph.follow('alex', 'chris');
+        this.graph.follow('alex', 'diana');
+        this.graph.follow('chris', 'bella');
+        this.graph.follow('diana', 'bella');
+        this.graph.follow('ethan', 'bella');
+        this.graph.follow('farah', 'alex');
+        this.graph.follow('bella', 'farah');
+
+        logOp('m1Log', 'INIT', 'Preloaded 6 users and initial directed follow relations', 'O(V + E)');
+        this.updateUI();
+      }
+
+      initEventListeners() {
+        document.getElementById('m1FollowBtn').addEventListener('click', () => {
+          const a = this.userASelect.value;
+          const b = this.userBSelect.value;
+          if (a === b) {
+            alert("A user cannot follow themselves!");
+            return;
+          }
+          const success = this.graph.follow(a, b);
+          if (success) {
+            logOp('m1Log', 'FOLLOW', `@${a} now follows @${b} (Updated Out(${a}) and In(${b}))`, 'O(1)');
+          } else {
+            logOp('m1Log', 'FOLLOW', `@${a} already follows @${b}`, 'O(1)');
+          }
+          this.updateUI();
+        });
+
+        document.getElementById('m1UnfollowBtn').addEventListener('click', () => {
+          const a = this.userASelect.value;
+          const b = this.userBSelect.value;
+          const success = this.graph.unfollow(a, b);
+          if (success) {
+            logOp('m1Log', 'UNFOLLOW', `@${a} unfollowed @${b} (Removed from Out(${a}) and In(${b}))`, 'O(1)');
+          } else {
+            logOp('m1Log', 'UNFOLLOW', `@${a} was not following @${b}`, 'O(1)');
+          }
+          this.updateUI();
+        });
+
+        document.getElementById('m1CheckBtn').addEventListener('click', () => {
+          const a = this.userASelect.value;
+          const b = this.userBSelect.value;
+          const doesFollow = this.graph.doesFollow(a, b);
+          this.lastCheckedFollow = doesFollow;
+          logOp('m1Log', 'LOOKUP', `Does @${a} follow @${b}? Hash Set probe outEdges.get('${a}').has('${b}') -> ${doesFollow}`, 'O(1)');
+          this.updateUI();
+        });
+
+        document.getElementById('m1MutualBtn').addEventListener('click', () => {
+          const a = this.userASelect.value;
+          const b = this.userBSelect.value;
+          const res = this.graph.computeMutuals(a, b);
+          this.activeMutuals = new Set(res.mutuals);
+
+          document.getElementById('m1StatProbes').textContent = res.probeCount;
+          document.getElementById('m1StatTheoretical').textContent = res.complexity;
+          document.getElementById('m1StatMutuals').textContent = res.mutuals.length;
+
+          const traceBox = document.getElementById('m1AlgoTrace');
+          traceBox.innerHTML = `<strong>Selected smaller set: ${res.smallerSet}</strong><br>` +
+            res.steps.map(s => `&bull; ${s}`).join('<br>') +
+            `<br><span style="color:#10b981; font-weight:700;">Mutual Set Out(${a}) &cap; In(${b}): {${res.mutuals.map(m=>'@'+m).join(', ') || 'None'}}</span>`;
+
+          logOp('m1Log', 'INTERSECT', `Computed Out(${a}) ∩ In(${b}): Found ${res.mutuals.length} mutuals in ${res.probeCount} probes`, res.complexity);
+          this.draw();
+        });
+
+        document.getElementById('m1ResetGraphBtn').addEventListener('click', () => {
+          this.initUsers();
+        });
+
+        this.userASelect.addEventListener('change', () => this.updateUI());
+        this.userBSelect.addEventListener('change', () => this.updateUI());
+      }
+
+      resize() {
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.canvas.width = rect.width;
+        this.canvas.height = rect.height || 420;
+        this.calculatePositions();
+        this.draw();
+      }
+
+      calculatePositions() {
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const centerX = w / 2;
+        const centerY = h / 2;
+        const radius = Math.min(w, h) * 0.36;
+
+        const users = Array.from(this.graph.users.keys());
+        const total = users.length;
+
+        users.forEach((userId, idx) => {
+          const angle = (idx / total) * 2 * Math.PI - Math.PI / 2;
+          this.nodePositions.set(userId, {
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle)
+          });
+        });
+      }
+
+      updateUI() {
+        const a = this.userASelect.value;
+        const b = this.userBSelect.value;
+
+        const doesFollow = this.graph.doesFollow(a, b);
+        document.getElementById('m1StatFollows').textContent = doesFollow ? 'Yes' : 'No';
+        document.getElementById('m1StatFollows').style.color = doesFollow ? '#10b981' : '#ef4444';
+
+        // Update Adjacency Table
+        const tbody = document.getElementById('adjTableBody');
+        tbody.innerHTML = '';
+
+        this.graph.users.forEach((u, uid) => {
+          const tr = document.createElement('tr');
+          if (uid === a || uid === b) tr.classList.add('highlighted');
+
+          const outSet = this.graph.outEdges.get(uid);
+          const inSet = this.graph.inEdges.get(uid);
+
+          const outTags = Array.from(outSet).map(target => {
+            const isMutual = this.activeMutuals.has(target);
+            return `<span class="set-tag ${isMutual ? 'matched' : ''}">@${target}</span>`;
+          }).join('') || '<span style="color:var(--text-muted);">&empty;</span>';
+
+          const inTags = Array.from(inSet).map(src => {
+            const isMutual = this.activeMutuals.has(src);
+            return `<span class="set-tag ${isMutual ? 'matched' : ''}">@${src}</span>`;
+          }).join('') || '<span style="color:var(--text-muted);">&empty;</span>';
+
+          tr.innerHTML = `
+            <td><strong>@${uid}</strong></td>
+            <td>[${outSet.size}] ${outTags}</td>
+            <td>[${inSet.size}] ${inTags}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        this.draw();
+      }
+
+      draw() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const userA = this.userASelect.value;
+        const userB = this.userBSelect.value;
+
+        // Draw directed curved edges
+        this.graph.outEdges.forEach((targets, srcId) => {
+          const srcPos = this.nodePositions.get(srcId);
+          if (!srcPos) return;
+
+          targets.forEach(targetId => {
+            const targetPos = this.nodePositions.get(targetId);
+            if (!targetPos) return;
+
+            const isAtoB = (srcId === userA && targetId === userB);
+            const isMutualEdge = (srcId === userA && this.activeMutuals.has(targetId)) ||
+                                 (this.activeMutuals.has(srcId) && targetId === userB);
+
+            ctx.beginPath();
+            // Quadratic curve offset for bidirectional edges
+            const dx = targetPos.x - srcPos.x;
+            const dy = targetPos.y - srcPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const normalX = -dy / dist;
+            const normalY = dx / dist;
+
+            const curvature = 28;
+            const cpX = (srcPos.x + targetPos.x) / 2 + normalX * curvature;
+            const cpY = (srcPos.y + targetPos.y) / 2 + normalY * curvature;
+
+            ctx.moveTo(srcPos.x, srcPos.y);
+            ctx.quadraticCurveTo(cpX, cpY, targetPos.x, targetPos.y);
+
+            if (isAtoB) {
+              ctx.strokeStyle = '#833ab4';
+              ctx.lineWidth = 3.5;
+            } else if (isMutualEdge) {
+              ctx.strokeStyle = '#10b981';
+              ctx.lineWidth = 3;
+            } else {
+              ctx.strokeStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#cbd5e1';
+              ctx.lineWidth = 1.5;
+            }
+            ctx.stroke();
+
+            // Arrowhead at target node border
+            const angle = Math.atan2(targetPos.y - cpY, targetPos.x - cpX);
+            const arrowDist = 28; // node radius
+            const arrowTipX = targetPos.x - arrowDist * Math.cos(angle);
+            const arrowTipY = targetPos.y - arrowDist * Math.sin(angle);
+
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.beginPath();
+            ctx.moveTo(arrowTipX, arrowTipY);
+            ctx.lineTo(arrowTipX - 10 * Math.cos(angle - Math.PI / 6), arrowTipY - 10 * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(arrowTipX - 10 * Math.cos(angle + Math.PI / 6), arrowTipY - 10 * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+          });
+        });
+
+        // Draw Nodes
+        this.graph.users.forEach((u, uid) => {
+          const pos = this.nodePositions.get(uid);
+          if (!pos) return;
+
+          const isA = (uid === userA);
+          const isB = (uid === userB);
+          const isMutual = this.activeMutuals.has(uid);
+
+          // Node Halo / Glow
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 26, 0, 2 * Math.PI);
+          if (isA) {
+            ctx.fillStyle = '#833ab4';
+          } else if (isB) {
+            ctx.fillStyle = '#fcaf45';
+          } else if (isMutual) {
+            ctx.fillStyle = '#10b981';
+          } else {
+            ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff';
+          }
+          ctx.fill();
+
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = isMutual ? '#10b981' : (isA ? '#833ab4' : (isB ? '#fcaf45' : '#e1306c'));
+          ctx.stroke();
+
+          // Text label (Initial & handle)
+          ctx.fillStyle = (isA || isB || isMutual) ? '#ffffff' : (document.documentElement.getAttribute('data-theme') === 'dark' ? '#ffffff' : '#000000');
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(u.id[0].toUpperCase(), pos.x, pos.y - 1);
+
+          // Label under node
+          ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#e2e8f0' : '#1e293b';
+          ctx.font = '600 11px monospace';
+          ctx.fillText(`@${u.id}`, pos.x, pos.y + 36);
+
+          // Follower & Following count badge
+          const outCount = this.graph.getFollowingCount(uid);
+          const inCount = this.graph.getFollowersCount(uid);
+          ctx.fillStyle = 'var(--text-muted)';
+          ctx.font = '10px monospace';
+          ctx.fillText(`${inCount}F / ${outCount}Following`, pos.x, pos.y + 49);
+        });
+      }
+    }
+
+    /* ==========================================================================
+       MODULE 2 IMPLEMENTATION: HEAP HOME FEED CONTROLLER & VISUALIZER
+       ========================================================================== */
+    class HeapVisualizer {
+      constructor() {
+        this.heap = new MaxHeap();
+        this.canvas = document.getElementById('heapCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.candidatePool = [];
+        this.celebrityPushMode = true;
+
+        this.initControls();
+        this.generateCandidates();
+        this.buildHeap();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+
+      initControls() {
+        const sliderN = document.getElementById('m2SliderN');
+        const sliderW1 = document.getElementById('m2SliderW1');
+        const sliderW2 = document.getElementById('m2SliderW2');
+        const sliderW3 = document.getElementById('m2SliderW3');
+        const sliderLambda = document.getElementById('m2SliderLambda');
+        const sliderK = document.getElementById('m2SliderK');
+
+        const updateLabels = () => {
+          document.getElementById('m2ValN').textContent = sliderN.value;
+          document.getElementById('m2ValW1').textContent = sliderW1.value;
+          document.getElementById('m2ValW2').textContent = sliderW2.value;
+          document.getElementById('m2ValW3').textContent = sliderW3.value;
+          document.getElementById('m2ValLambda').textContent = sliderLambda.value;
+          document.getElementById('m2ValK').textContent = sliderK.value;
+        };
+
+        [sliderN, sliderW1, sliderW2, sliderW3, sliderLambda, sliderK].forEach(s => {
+          s.addEventListener('input', () => {
+            updateLabels();
+            if (s === sliderN) {
+              this.generateCandidates();
+              this.buildHeap();
+            } else {
+              this.rescoreCandidates();
+              this.buildHeap();
+            }
+          });
+        });
+
+        document.getElementById('m2BuildHeapBtn').addEventListener('click', () => {
+          this.buildHeap();
+          logOp('m2Log', 'BUILD_HEAP', `Floyd's bottom-up heapification completed on ${this.heap.size()} items`, 'O(N)');
+        });
+
+        document.getElementById('m2ExtractTopKBtn').addEventListener('click', () => {
+          const k = parseInt(sliderK.value, 10);
+          const res = this.heap.extractTopK(k);
+          logOp('m2Log', 'TOP_K', `Extracted Top-${res.topK.length} ranked feed items in ${res.comparisons} comparisons`, 'O(K log N)');
+          alert(`Top ${res.topK.length} Posts on Feed:\n\n` + res.topK.map((p, i) => `${i+1}. [Score: ${p.score.toFixed(1)}] ${p.author}: "${p.caption}"`).join('\n'));
+        });
+
+        document.getElementById('m2InsertPostBtn').addEventListener('click', () => {
+          const newPost = this.createRandomPost(this.heap.size() + 1);
+          this.heap.insert(newPost);
+          logOp('m2Log', 'INSERT', `Inserted new post #${newPost.id} (Score: ${newPost.score.toFixed(1)}) into Priority Queue`, 'O(log N)');
+          this.updateMetrics();
+          this.draw();
+        });
+
+        document.getElementById('m2ExtractMaxBtn').addEventListener('click', () => {
+          const max = this.heap.extractMax();
+          if (max) {
+            logOp('m2Log', 'EXTRACT_MAX', `Root extracted: Post #${max.id} (${max.author}, Score: ${max.score.toFixed(1)})`, 'O(log N)');
+            this.updateMetrics();
+            this.draw();
+          } else {
+            logOp('m2Log', 'EXTRACT_MAX', 'Heap is empty!', 'O(1)');
+          }
+        });
+
+        document.getElementById('m2RescoreBtn').addEventListener('click', () => {
+          this.rescoreCandidates();
+          this.buildHeap();
+          logOp('m2Log', 'RESCORE', `Dynamically re-scored all candidate posts with new weight vectors`, 'O(N)');
+        });
+
+        // Celebrity Mode Toggle
+        const celebBtn = document.getElementById('m2CelebrityToggleBtn');
+        celebBtn.addEventListener('click', () => {
+          this.celebrityPushMode = !this.celebrityPushMode;
+          celebBtn.textContent = this.celebrityPushMode ? 'Mode: Push (Write)' : 'Mode: Pull (Read)';
+          celebBtn.className = this.celebrityPushMode ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+          const desc = document.getElementById('m2CelebrityDesc');
+          const arrowLabel = document.getElementById('archArrowLabel');
+          if (this.celebrityPushMode) {
+            desc.innerHTML = `<strong>Push Model (Fan-out on write):</strong> Post written directly to all follower inboxes. For celebrities with 50M+ followers, 1 write results in 50 million database inserts!`;
+            arrowLabel.textContent = `Fan-out 50M writes`;
+          } else {
+            desc.innerHTML = `<strong>Pull Model (Fan-out on read / Hybrid):</strong> Celebrity post stays in single celebrity bucket. Followers pull and merge at feed load time. Writes = O(1), zero database explosion!`;
+            arrowLabel.textContent = `Zero write amplification (Pull on read)`;
+          }
+          logOp('m2Log', 'CELEBRITY', `Toggled Architecture to: ${this.celebrityPushMode ? 'Push (Fan-out on write)' : 'Pull (Fan-out on read)'}`, this.celebrityPushMode ? 'O(Followers)' : 'O(1) Write');
+        });
+      }
+
+      createRandomPost(id) {
+        const authors = ['alex', 'bella', 'chris', 'diana', 'ethan', 'farah', 'natasha', 'zayn'];
+        const captions = ['Sunset in Pune 🌅', 'DSA grind never stops 💻', 'Coffee & Code ☕', 'Weekend vibes ✨', 'Campus life 🎓'];
+        const ageHours = Math.random() * 72; // up to 3 days
+        const affinity = Math.random();
+        const pEngagement = Math.random();
+
+        const w1 = parseFloat(document.getElementById('m2SliderW1').value);
+        const w2 = parseFloat(document.getElementById('m2SliderW2').value);
+        const w3 = parseFloat(document.getElementById('m2SliderW3').value);
+        const lambda = parseFloat(document.getElementById('m2SliderLambda').value);
+
+        const recencyDecay = Math.exp(-lambda * ageHours);
+        const score = (w1 * recencyDecay + w2 * affinity + w3 * pEngagement) * 100;
+
+        return {
+          id: id,
+          author: '@' + authors[Math.floor(Math.random() * authors.length)],
+          caption: captions[Math.floor(Math.random() * captions.length)],
+          ageHours,
+          affinity,
+          pEngagement,
+          score
+        };
+      }
+
+      generateCandidates() {
+        const n = parseInt(document.getElementById('m2SliderN').value, 10);
+        this.candidatePool = [];
+        for (let i = 1; i <= n; i++) {
+          this.candidatePool.push(this.createRandomPost(i));
+        }
+      }
+
+      rescoreCandidates() {
+        const w1 = parseFloat(document.getElementById('m2SliderW1').value);
+        const w2 = parseFloat(document.getElementById('m2SliderW2').value);
+        const w3 = parseFloat(document.getElementById('m2SliderW3').value);
+        const lambda = parseFloat(document.getElementById('m2SliderLambda').value);
+
+        this.candidatePool.forEach(p => {
+          const recencyDecay = Math.exp(-lambda * p.ageHours);
+          p.score = (w1 * recencyDecay + w2 * p.affinity + w3 * p.pEngagement) * 100;
+        });
+      }
+
+      buildHeap() {
+        this.heap.buildHeapFloyd(this.candidatePool);
+        this.updateMetrics();
+        this.draw();
+      }
+
+      updateMetrics() {
+        const n = this.heap.size();
+        const k = parseInt(document.getElementById('m2SliderK').value, 10);
+
+        // Calculate Heap Top-K comparisons: Floyd O(N) + K log N
+        const heapTopKResult = this.heap.extractTopK(k);
+        const totalHeapOps = this.heap.comparisons + heapTopKResult.comparisons;
+
+        // Calculate Quicksort comparisons on same candidate array
+        const fullSortOps = countQuicksortComparisons(this.candidatePool);
+
+        document.getElementById('m2StatHeapOps').textContent = totalHeapOps;
+        document.getElementById('m2StatSortOps').textContent = fullSortOps;
+
+        // Bar Chart
+        const maxOps = Math.max(fullSortOps, totalHeapOps, 1);
+        const heapPct = Math.min(100, Math.max(5, (totalHeapOps / maxOps) * 100));
+        const sortPct = 100;
+
+        document.getElementById('m2BarHeap').style.width = `${heapPct}%`;
+        document.getElementById('m2BarSort').style.width = `${sortPct}%`;
+
+        document.getElementById('m2BarHeapLabel').textContent = `${totalHeapOps} ops`;
+        document.getElementById('m2BarSortLabel').textContent = `${fullSortOps} ops`;
+
+        const savings = Math.max(0, ((fullSortOps - totalHeapOps) / fullSortOps) * 100).toFixed(1);
+        document.getElementById('m2SavingsRate').textContent = `${savings}% Operations Saved`;
+
+        // Update Array View Below Tree
+        const arrayView = document.getElementById('heapArrayView');
+        arrayView.innerHTML = '';
+        document.getElementById('m2ArraySizeBadge').textContent = `Size: ${n}`;
+
+        this.heap.heap.slice(0, 31).forEach((p, idx) => {
+          const cell = document.createElement('div');
+          cell.className = 'array-cell';
+          if (idx === 0) cell.classList.add('active-heap');
+          cell.innerHTML = `
+            <div class="idx">[${idx}]</div>
+            <div class="val">${p.score.toFixed(0)}</div>
+            <div class="pid">#${p.id}</div>
+          `;
+          arrayView.appendChild(cell);
+        });
+      }
+
+      resize() {
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.canvas.width = rect.width;
+        this.canvas.height = rect.height || 320;
+        this.draw();
+      }
+
+      draw() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const items = this.heap.heap;
+        if (items.length === 0) return;
+
+        // Draw Complete Binary Tree up to 4 levels (15 nodes) for clear aesthetics
+        const renderLimit = Math.min(items.length, 31);
+        const maxLevel = Math.floor(Math.log2(renderLimit));
+
+        const positions = [];
+
+        for (let i = 0; i < renderLimit; i++) {
+          const level = Math.floor(Math.log2(i + 1));
+          const levelIndex = i - (Math.pow(2, level) - 1);
+          const totalInLevel = Math.pow(2, level);
+
+          const y = 40 + level * 65;
+          const x = (w / (totalInLevel + 1)) * (levelIndex + 1);
+          positions.push({ x, y });
+        }
+
+        // Draw branch edges first
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#cbd5e1';
+
+        for (let i = 0; i < renderLimit; i++) {
+          const left = 2 * i + 1;
+          const right = 2 * i + 2;
+
+          if (left < renderLimit) {
+            ctx.beginPath();
+            ctx.moveTo(positions[i].x, positions[i].y);
+            ctx.lineTo(positions[left].x, positions[left].y);
+            ctx.stroke();
+          }
+
+          if (right < renderLimit) {
+            ctx.beginPath();
+            ctx.moveTo(positions[i].x, positions[i].y);
+            ctx.lineTo(positions[right].x, positions[right].y);
+            ctx.stroke();
+          }
+        }
+
+        // Draw Nodes
+        positions.forEach((pos, i) => {
+          const item = items[i];
+          const isRoot = (i === 0);
+
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 18, 0, 2 * Math.PI);
+          ctx.fillStyle = isRoot ? 'var(--ig-pink)' : (document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff');
+          ctx.fill();
+
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = isRoot ? '#ffffff' : 'var(--ig-purple)';
+          ctx.stroke();
+
+          // Node Text: Score
+          ctx.fillStyle = isRoot ? '#ffffff' : (document.documentElement.getAttribute('data-theme') === 'dark' ? '#f8fafc' : '#0f172a');
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(item.score.toFixed(0), pos.x, pos.y - 2);
+
+          // Node subtext: Post ID
+          ctx.fillStyle = isRoot ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)';
+          ctx.font = '8px monospace';
+          ctx.fillText(`#${item.id}`, pos.x, pos.y + 7);
+        });
+      }
+    }
+
+    /* ==========================================================================
+       MODULE 3 IMPLEMENTATION: DM BROKER & DLL CONTROLLER
+       ========================================================================== */
+    class DMController {
+      constructor() {
+        this.brokerQueue = new FIFOQueue();
+        this.clientDLL = new DoublyLinkedList();
+        this.currentSeq = 0;
+        this.lastReadAck = 0;
+
+        this.initControls();
+        this.preloadInitialChat();
+      }
+
+      preloadInitialChat() {
+        // Preload past history
+        this.appendMessage('@alex', 'Hey Bella! Did you check out the new DSA visualization?', false);
+        this.appendMessage('@bella', 'Yes! The Max-Heap feed ranking looks super clean.', false);
+        this.lastReadAck = this.currentSeq;
+        this.updateSyncBadge();
+        this.renderDLL();
+      }
+
+      initControls() {
+        document.getElementById('alexSendBtn').addEventListener('click', () => {
+          const input = document.getElementById('alexInput');
+          const text = input.value.trim();
+          if (!text) return;
+          input.value = '';
+          this.sendMessage('@alex', '@bella', text);
+        });
+
+        document.getElementById('bellaSendBtn').addEventListener('click', () => {
+          const input = document.getElementById('bellaInput');
+          const text = input.value.trim();
+          if (!text) return;
+          input.value = '';
+          this.sendMessage('@bella', '@alex', text);
+        });
+
+        document.getElementById('bellaOpenChatBtn').addEventListener('click', () => {
+          this.lastReadAck = this.currentSeq;
+          this.updateSyncBadge();
+          logOp('m3Log', 'ACK', `Bella opened chat: Ack pointer set to Seq #${this.lastReadAck}. Unread count reset to 0`, 'O(1)');
+        });
+
+        document.getElementById('m3AlexLoadHistoryBtn').addEventListener('click', () => {
+          const olderArchives = [
+            { sender: '@alex', text: 'Throwback to semester 1 algorithmic assignments!' },
+            { sender: '@bella', text: 'Haha yes, doubly linked list pointers were fun.' }
+          ];
+
+          olderArchives.forEach(m => {
+            this.currentSeq++;
+            const data = {
+              seq: this.currentSeq,
+              sender: m.sender,
+              text: m.text,
+              time: 'History'
+            };
+            this.clientDLL.prepend(data);
+            logOp('m3Log', 'PREPEND', `Prepend older msg to DLL HEAD: "${m.text.substr(0, 20)}..."`, 'O(1)');
+          });
+
+          this.renderThreads();
+          this.renderDLL();
+        });
+      }
+
+      sendMessage(sender, recipient, text) {
+        this.currentSeq++;
+        const msg = {
+          seq: this.currentSeq,
+          sender,
+          recipient,
+          text,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        // Step 1: Enqueue in FIFO Message Broker (O(1))
+        this.brokerQueue.enqueue(msg);
+        logOp('m3Log', 'ENQUEUE', `Msg #${msg.seq} pushed into FIFO Message Broker Buffer [Tail]`, 'O(1)');
+        this.renderBrokerBelt();
+
+        // Step 2: Simulate network broker delivery dequeue after 400ms
+        setTimeout(() => {
+          const dequeued = this.brokerQueue.dequeue();
+          if (dequeued) {
+            logOp('m3Log', 'DEQUEUE', `Msg #${dequeued.seq} popped from FIFO Broker Head and delivered to recipient`, 'O(1)');
+            this.renderBrokerBelt();
+
+            // Append to Client-Side DLL (O(1))
+            this.clientDLL.append(dequeued);
+            logOp('m3Log', 'APPEND', `Msg #${dequeued.seq} appended to Client Doubly Linked List [Tail]`, 'O(1)');
+
+            this.renderThreads();
+            this.renderDLL();
+            this.updateSyncBadge();
+          }
+        }, 400);
+      }
+
+      appendMessage(sender, text, log = true) {
+        this.currentSeq++;
+        const msg = {
+          seq: this.currentSeq,
+          sender,
+          recipient: sender === '@alex' ? '@bella' : '@alex',
+          text,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        this.clientDLL.append(msg);
+        if (log) logOp('m3Log', 'APPEND', `Msg #${msg.seq} appended to DLL`, 'O(1)');
+        this.renderThreads();
+      }
+
+      updateSyncBadge() {
+        const latest = this.currentSeq;
+        const ack = this.lastReadAck;
+        const unread = Math.max(0, latest - ack);
+
+        document.getElementById('m3StatLatestSeq').textContent = latest;
+        document.getElementById('m3StatAckSeq').textContent = ack;
+        document.getElementById('m3StatUnreadVal').textContent = unread;
+
+        const badge = document.getElementById('bellaBadgeCount');
+        if (unread > 0) {
+          badge.style.display = 'inline-block';
+          badge.textContent = unread;
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      renderBrokerBelt() {
+        const belt = document.getElementById('brokerBelt');
+        const items = this.brokerQueue.toArray();
+        document.getElementById('m3BrokerCount').textContent = `In-flight: ${items.length} msgs`;
+
+        if (items.length === 0) {
+          belt.innerHTML = `<span style="color: var(--text-muted); font-size: 0.75rem; margin: auto;">Broker Queue Empty (Ready for messages)</span>`;
+          return;
+        }
+
+        belt.innerHTML = '';
+        items.forEach((m, idx) => {
+          const pill = document.createElement('div');
+          pill.className = 'broker-pill';
+          pill.innerHTML = `<span>#${m.seq}</span> <span>${m.sender} &rarr; ${m.recipient}</span>`;
+          belt.appendChild(pill);
+        });
+      }
+
+      renderThreads() {
+        const alexThread = document.getElementById('alexThread');
+        const bellaThread = document.getElementById('bellaThread');
+
+        alexThread.innerHTML = '';
+        bellaThread.innerHTML = '';
+
+        const messages = this.clientDLL.toArray();
+
+        messages.forEach(m => {
+          // Alex View
+          const alexBubble = document.createElement('div');
+          alexBubble.className = `chat-msg ${m.sender === '@alex' ? 'sent' : 'received'}`;
+          alexBubble.innerHTML = `${escapeHtml(m.text)} <span class="msg-seq">Seq #${m.seq} &bull; ${m.time}</span>`;
+          alexThread.appendChild(alexBubble);
+
+          // Bella View
+          const bellaBubble = document.createElement('div');
+          bellaBubble.className = `chat-msg ${m.sender === '@bella' ? 'sent' : 'received'}`;
+          bellaBubble.innerHTML = `${escapeHtml(m.text)} <span class="msg-seq">Seq #${m.seq} &bull; ${m.time}</span>`;
+          bellaThread.appendChild(bellaBubble);
+        });
+
+        alexThread.scrollTop = alexThread.scrollHeight;
+        bellaThread.scrollTop = bellaThread.scrollHeight;
+      }
+
+      renderDLL() {
+        const wrapper = document.getElementById('dllWrapper');
+        wrapper.innerHTML = '';
+
+        let curr = this.clientDLL.head;
+        if (!curr) {
+          wrapper.innerHTML = `<span style="color:var(--text-muted); margin:auto; font-size:0.75rem;">DLL Empty</span>`;
+          return;
+        }
+
+        while (curr) {
+          const box = document.createElement('div');
+          box.className = 'dll-node-box';
+          const isHead = (curr === this.clientDLL.head);
+          const isTail = (curr === this.clientDLL.tail);
+
+          box.innerHTML = `
+            <div class="pointers">
+              <span>${curr.prev ? '&larr; prev' : 'null'}</span>
+              <span style="color:var(--ig-pink);">${isHead ? 'HEAD' : (isTail ? 'TAIL' : '')}</span>
+              <span>${curr.next ? 'next &rarr;' : 'null'}</span>
+            </div>
+            <strong>Seq #${curr.data.seq}</strong>
+            <div style="font-size:0.65rem; color:var(--text-secondary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:90px;">
+              ${escapeHtml(curr.data.text)}
+            </div>
+          `;
+          wrapper.appendChild(box);
+
+          if (curr.next) {
+            const arrow = document.createElement('div');
+            arrow.className = 'dll-arrow';
+            arrow.innerHTML = '&rlarr;';
+            wrapper.appendChild(arrow);
+          }
+
+          curr = curr.next;
+        }
+      }
+    }
+
+    /* ==========================================================================
+       MODULE 4 IMPLEMENTATION: STORY EDITOR DUAL STACK & COMMAND PATTERN
+       ========================================================================== */
+    class StoryEditorApp {
+      constructor() {
+        this.canvas = document.getElementById('storyCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.undoStack = new BoundedStack(50);
+        this.redoStack = new BoundedStack(50);
+
+        // Canvas state elements
+        this.state = {
+          filter: 'normal',
+          stickers: [],
+          texts: [],
+          strokes: [],
+          frame: false
+        };
+
+        this.initControls();
+        this.redrawCanvas();
+        this.updateUI();
+      }
+
+      initControls() {
+        document.getElementById('m4UndoBtn').addEventListener('click', () => this.undo());
+        document.getElementById('m4RedoBtn').addEventListener('click', () => this.redo());
+        document.getElementById('m4ClearCanvasBtn').addEventListener('click', () => {
+          this.executeCommand(new StoryCommand('clear', 'Reset All Layers',
+            () => { this.state = { filter: 'normal', stickers: [], texts: [], strokes: [], frame: false }; },
+            () => {},
+            100
+          ));
+        });
+
+        document.getElementById('m4AddTextBtn').addEventListener('click', () => {
+          const textInput = document.getElementById('m4TextInput');
+          const str = textInput.value.trim() || 'Instagram DSA';
+          const textItem = {
+            id: Math.random(),
+            text: str,
+            x: 135,
+            y: 200 + Math.random() * 80,
+            color: '#ffffff'
+          };
+
+          const cmd = new StoryCommand('text', `Add Text: "${str.substr(0, 12)}"`,
+            () => { this.state.texts.push(textItem); },
+            () => { this.state.texts = this.state.texts.filter(t => t.id !== textItem.id); },
+            180
+          );
+          this.executeCommand(cmd);
+        });
+
+        // Quick sticker buttons
+        document.getElementById('m4StickerFire').addEventListener('click', () => this.addSticker('🔥'));
+        document.getElementById('m4StickerHeart').addEventListener('click', () => this.addSticker('❤️'));
+        document.getElementById('m4StickerStar').addEventListener('click', () => this.addSticker('⭐'));
+        document.getElementById('m4ToolFrame').addEventListener('click', () => {
+          const oldFrame = this.state.frame;
+          const cmd = new StoryCommand('frame', 'Toggle Vignette Frame',
+            () => { this.state.frame = !oldFrame; },
+            () => { this.state.frame = oldFrame; },
+            50
+          );
+          this.executeCommand(cmd);
+        });
+      }
+
+      addSticker(emoji) {
+        const item = {
+          id: Math.random(),
+          emoji,
+          x: 40 + Math.random() * 190,
+          y: 80 + Math.random() * 260
+        };
+        const cmd = new StoryCommand('sticker', `Add Sticker ${emoji}`,
+          () => { this.state.stickers.push(item); },
+          () => { this.state.stickers = this.state.stickers.filter(s => s.id !== item.id); },
+          120
+        );
+        this.executeCommand(cmd);
+      }
+
+      applyFilter(filterName) {
+        const prevFilter = this.state.filter;
+        const cmd = new StoryCommand('filter', `Filter: ${filterName}`,
+          () => { this.state.filter = filterName; },
+          () => { this.state.filter = prevFilter; },
+          60
+        );
+        this.executeCommand(cmd);
+      }
+
+      drawStroke(color) {
+        const strokeId = Math.random();
+        const startX = 30 + Math.random() * 40;
+        const startY = 120 + Math.random() * 200;
+        const points = [
+          { x: startX, y: startY },
+          { x: startX + 60, y: startY - 30 },
+          { x: startX + 120, y: startY + 20 },
+          { x: startX + 180, y: startY - 10 }
+        ];
+
+        const strokeObj = { id: strokeId, color, points };
+
+        const cmd = new StoryCommand('draw', `Brush Stroke (${color})`,
+          () => { this.state.strokes.push(strokeObj); },
+          () => { this.state.strokes = this.state.strokes.filter(s => s.id !== strokeId); },
+          320
+        );
+        this.executeCommand(cmd);
+      }
+
+      executeCommand(cmd) {
+        cmd.execute();
+        this.undoStack.push(cmd);
+        this.redoStack.clear(); // Clear redo branch on new modification
+        logOp('m4Log', 'EXECUTE', `Executed & Pushed onto UndoStack: ${cmd.description}`, 'O(1)');
+        this.redrawCanvas();
+        this.updateUI();
+      }
+
+      undo() {
+        if (this.undoStack.isEmpty()) return;
+        const cmd = this.undoStack.pop();
+        cmd.unexecute();
+        this.redoStack.push(cmd);
+        logOp('m4Log', 'UNDO', `Popped from UndoStack & Pushed to RedoStack: ${cmd.description}`, 'O(1)');
+        this.redrawCanvas();
+        this.updateUI();
+      }
+
+      redo() {
+        if (this.redoStack.isEmpty()) return;
+        const cmd = this.redoStack.pop();
+        cmd.execute();
+        this.undoStack.push(cmd);
+        logOp('m4Log', 'REDO', `Popped from RedoStack & Restored to UndoStack: ${cmd.description}`, 'O(1)');
+        this.redrawCanvas();
+        this.updateUI();
+      }
+
+      redrawCanvas() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. Base Story Backdrop Gradient
+        const grad = ctx.createLinearGradient(0, 0, w, h);
+        switch (this.state.filter) {
+          case 'valencia':
+            grad.addColorStop(0, '#f3a152');
+            grad.addColorStop(1, '#a84e32');
+            break;
+          case 'mono':
+            grad.addColorStop(0, '#2b2b2b');
+            grad.addColorStop(1, '#777777');
+            break;
+          case 'clarendon':
+            grad.addColorStop(0, '#1c426e');
+            grad.addColorStop(1, '#4facfe');
+            break;
+          case 'sunset':
+            grad.addColorStop(0, '#f857a6');
+            grad.addColorStop(1, '#ff5858');
+            break;
+          default:
+            grad.addColorStop(0, '#833ab4');
+            grad.addColorStop(0.5, '#fd1d1d');
+            grad.addColorStop(1, '#fcb045');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // 2. Render Freehand Strokes
+        this.state.strokes.forEach(s => {
+          if (s.points.length < 2) return;
+          ctx.beginPath();
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 6;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.moveTo(s.points[0].x, s.points[0].y);
+          for (let i = 1; i < s.points.length; i++) {
+            ctx.lineTo(s.points[i].x, s.points[i].y);
+          }
+          ctx.stroke();
+        });
+
+        // 3. Render Stickers
+        this.state.stickers.forEach(st => {
+          ctx.font = '32px apple color emoji, segoe ui emoji';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(st.emoji, st.x, st.y);
+        });
+
+        // 4. Render Text Overlays
+        this.state.texts.forEach(t => {
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.textAlign = 'center';
+          const textMetrics = ctx.measureText(t.text);
+          ctx.fillRect(t.x - textMetrics.width / 2 - 8, t.y - 14, textMetrics.width + 16, 26);
+
+          ctx.fillStyle = t.color;
+          ctx.fillText(t.text, t.x, t.y + 4);
+        });
+
+        // 5. Frame Overlay
+        if (this.state.frame) {
+          ctx.lineWidth = 14;
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.strokeRect(0, 0, w, h);
+        }
+      }
+
+      updateUI() {
+        const undoSize = this.undoStack.size();
+        const redoSize = this.redoStack.size();
+
+        document.getElementById('m4UndoBtn').disabled = (undoSize === 0);
+        document.getElementById('m4RedoBtn').disabled = (redoSize === 0);
+
+        document.getElementById('m4UndoCount').textContent = undoSize;
+        document.getElementById('m4RedoCount').textContent = redoSize;
+
+        // Capacity gauge
+        document.getElementById('m4CapacityText').textContent = `${undoSize} / 50`;
+        const capPct = (undoSize / 50) * 100;
+        document.getElementById('m4CapacityBar').style.width = `${capPct}%`;
+
+        // Render Stacks visually
+        this.renderStackDOM('m4UndoBucket', this.undoStack.toArray());
+        this.renderStackDOM('m4RedoBucket', this.redoStack.toArray());
+
+        // Memory delta calculation
+        const totalDeltaBytes = this.undoStack.toArray().reduce((acc, c) => acc + c.deltaBytes, 0);
+        const fullSnapshotBytesPerState = 1080 * 1920 * 4; // 8,294,400 bytes = 8.29 MB
+        const totalSnapshotBytes = undoSize * fullSnapshotBytesPerState;
+
+        const deltaKB = (totalDeltaBytes / 1024).toFixed(2);
+        const snapMB = (totalSnapshotBytes / (1024 * 1024)).toFixed(2);
+
+        document.getElementById('m4DeltaMemoryText').textContent = `${deltaKB} KB`;
+        document.getElementById('m4SnapshotMemoryText').textContent = `${snapMB} MB`;
+
+        const savingsPct = undoSize > 0
+          ? ((1 - (totalDeltaBytes / totalSnapshotBytes)) * 100).toFixed(2)
+          : '99.9';
+        document.getElementById('m4MemorySavedPercent').textContent = `${savingsPct}% Saved`;
+      }
+
+      renderStackDOM(containerId, items) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (items.length === 0) {
+          container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.72rem; text-align: center; margin: auto;">[Empty Stack]</div>`;
+          return;
+        }
+
+        items.forEach((item, idx) => {
+          const isTop = (idx === items.length - 1);
+          const el = document.createElement('div');
+          el.className = `stack-item ${isTop ? 'top-item' : ''}`;
+          el.innerHTML = `
+            <span>${escapeHtml(item.description)}</span>
+            ${isTop ? '<span class="top-badge">TOP</span>' : `<span style="font-size:0.65rem; color:var(--text-muted);">${item.deltaBytes}B</span>`}
+          `;
+          container.appendChild(el);
+        });
+      }
+
+      resize() {
+        this.redrawCanvas();
+      }
+    }
+
+    // Global helper for filter buttons
+    function m4ApplyFilter(filter) {
+      if (storyApp) storyApp.applyFilter(filter);
+    }
+
+    function m4DrawPresetStroke(color) {
+      if (storyApp) storyApp.drawStroke(color);
+    }
+
+    /* ==========================================================================
+       MODULE 5: COMPLEXITY SUMMARY & SYNTHETIC LIVE BENCHMARK
+       ========================================================================== */
+    class BenchmarkRunner {
+      constructor() {
+        this.initControls();
+      }
+
+      initControls() {
+        // Table filtering
+        const pills = document.querySelectorAll('#complexityFilterPills .filter-pill');
+        const rows = document.querySelectorAll('#complexityTableBody tr');
+
+        pills.forEach(pill => {
+          pill.addEventListener('click', () => {
+            pills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            const cat = pill.getAttribute('data-filter');
+
+            rows.forEach(r => {
+              if (cat === 'all' || r.getAttribute('data-cat') === cat) {
+                r.style.display = '';
+              } else {
+                r.style.display = 'none';
+              }
+            });
+          });
+        });
+
+        // Run Benchmark Button
+        document.getElementById('runLiveBenchmarkBtn').addEventListener('click', () => this.runLiveBenchmark());
+      }
+
+      runLiveBenchmark() {
+        const status = document.getElementById('benchmarkStatus');
+        status.textContent = 'Running synthetic algorithmic benchmarks...';
+
+        setTimeout(() => {
+          // Benchmark 1: Graph Hash Set Probe vs Array Linear Scan (N = 10,000)
+          const N1 = 10000;
+          const hashSet = new Set();
+          const linearArr = [];
+          for (let i = 0; i < N1; i++) {
+            const key = `user_${i}`;
+            hashSet.add(key);
+            linearArr.push(key);
+          }
+          const target = `user_${N1 - 1}`;
+
+          // Measure Hash Set
+          const t0 = performance.now();
+          for (let k = 0; k < 5000; k++) {
+            hashSet.has(target);
+          }
+          const t1 = performance.now();
+          const hashTime = (t1 - t0).toFixed(2);
+
+          // Measure Array Linear Scan
+          const t2 = performance.now();
+          for (let k = 0; k < 5000; k++) {
+            linearArr.includes(target);
+          }
+          const t3 = performance.now();
+          const arrayTime = (t3 - t2).toFixed(2);
+
+          document.getElementById('b1HashTime').textContent = `${hashTime} ms`;
+          document.getElementById('b1ArrayTime').textContent = `${arrayTime} ms`;
+          const spd1 = Math.max(1, (parseFloat(arrayTime) / Math.max(0.01, parseFloat(hashTime)))).toFixed(0);
+          document.getElementById('b1Speedup').textContent = `${spd1}x Faster O(1)`;
+
+          // Benchmark 2: Floyd's O(N) Build Heap vs Repeated SiftUp O(N log N) (N = 50,000)
+          const N2 = 50000;
+          const rawItems = Array.from({ length: N2 }, () => ({ score: Math.random() * 1000 }));
+
+          const t4 = performance.now();
+          const heapFloyd = new MaxHeap();
+          heapFloyd.buildHeapFloyd(rawItems);
+          const t5 = performance.now();
+          const floydTime = (t5 - t4).toFixed(2);
+
+          const t6 = performance.now();
+          const heapRepeated = new MaxHeap();
+          for (let i = 0; i < rawItems.length; i++) {
+            heapRepeated.insert(rawItems[i]);
+          }
+          const t7 = performance.now();
+          const insertTime = (t7 - t6).toFixed(2);
+
+          document.getElementById('b2FloydTime').textContent = `${floydTime} ms`;
+          document.getElementById('b2InsertTime').textContent = `${insertTime} ms`;
+          const spd2 = (parseFloat(insertTime) / Math.max(0.01, parseFloat(floydTime))).toFixed(1);
+          document.getElementById('b2Speedup').textContent = `${spd2}x Faster Floyd O(N)`;
+
+          // Benchmark 3: Top-10 Heap Extraction vs Full Array Sort (N = 50,000)
+          const itemsToSort = Array.from({ length: N2 }, () => ({ score: Math.random() * 1000 }));
+          const t8 = performance.now();
+          const heapTop10 = new MaxHeap();
+          heapTop10.buildHeapFloyd(itemsToSort);
+          heapTop10.extractTopK(10);
+          const t9 = performance.now();
+          const heapExtractTime = (t9 - t8).toFixed(2);
+
+          const t10 = performance.now();
+          const copyForSort = [...itemsToSort];
+          copyForSort.sort((a, b) => b.score - a.score);
+          const t11 = performance.now();
+          const fullSortTime = (t11 - t10).toFixed(2);
+
+          document.getElementById('b3HeapTime').textContent = `${heapExtractTime} ms`;
+          document.getElementById('b3SortTime').textContent = `${fullSortTime} ms`;
+          const spd3 = (parseFloat(fullSortTime) / Math.max(0.01, parseFloat(heapExtractTime))).toFixed(1);
+          document.getElementById('b3Speedup').textContent = `${spd3}x Less Compute`;
+
+          // Benchmark 4: Doubly Linked List Prepend vs Array.unshift() (N = 25,000)
+          const N4 = 25000;
+          const t12 = performance.now();
+          const dll = new DoublyLinkedList();
+          for (let i = 0; i < N4; i++) {
+            dll.prepend({ seq: i, text: 'node' });
+          }
+          const t13 = performance.now();
+          const dllTime = (t13 - t12).toFixed(2);
+
+          const t14 = performance.now();
+          const jsArray = [];
+          for (let i = 0; i < N4; i++) {
+            jsArray.unshift({ seq: i, text: 'node' });
+          }
+          const t15 = performance.now();
+          const unshiftTime = (t15 - t14).toFixed(2);
+
+          document.getElementById('b4DllTime').textContent = `${dllTime} ms`;
+          document.getElementById('b4UnshiftTime').textContent = `${unshiftTime} ms`;
+          const spd4 = (parseFloat(unshiftTime) / Math.max(0.01, parseFloat(dllTime))).toFixed(0);
+          document.getElementById('b4Speedup').textContent = `${spd4}x Faster O(1) vs O(N)`;
+
+          status.textContent = 'Live benchmark completed successfully!';
+        }, 50);
+      }
+    }
+
+    /* ==========================================================================
+       APP INITIALIZATION
+       ========================================================================== */
+    let graphVisualizer, heapVisualizer, dmApp, storyApp, benchRunner;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      graphVisualizer = new GraphVisualizer();
+      heapVisualizer = new HeapVisualizer();
+      dmApp = new DMController();
+      storyApp = new StoryEditorApp();
+      benchRunner = new BenchmarkRunner();
+    });
+  </script>
+</body>
+</html>
